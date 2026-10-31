@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.mobileprovision
+
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/
+build/
+*.ipa
+
+# Databases
+*.sql.gz
+*.dump
+
+# IDE
+.idea/
+.vscode/
