@@ -1,0 +1,13 @@
+CREATE DATABASE totp_2fa_system;
+CREATE ROLE developer WITH LOGIN PASSWORD 'password';
+GRANT CONNECT ON DATABASE totp_2fa_system TO developer;
+
+CREATE TABLE IF NOT EXISTS users (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+GRANT USAGE ON SCHEMA public TO developer;
+GRANT SELECT, INSERT, UPDATE ON users TO developer;

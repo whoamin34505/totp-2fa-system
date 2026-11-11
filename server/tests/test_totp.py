@@ -11,7 +11,10 @@ RFC6238_VECTORS = [
     (20000000000, "65353130"),
 ]
 
-@pytest.mark.parametrize("counter, expected_otp", RFC6238_VECTORS)
-def test_hotp_rfc6238(counter, expected_otp):
-    result = totp(SECRET, counter, 8)
+@pytest.mark.parametrize("timestamp, expected_otp", RFC6238_VECTORS)
+def test_totp_rfc6238(timestamp, expected_otp):
+    result = totp(SECRET, timestamp, 8)
     assert result == expected_otp
+
+def test_totp_six_digits():
+    assert totp(b"12345678901234567890",59,6) == "287082"
