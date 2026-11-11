@@ -1,5 +1,5 @@
 import hashlib
-
+import time
 
 def hmac_sha1(key: bytes, message: bytes) -> bytes:
     if len(key) > 64:
@@ -22,29 +22,22 @@ def hmac_sha1(key: bytes, message: bytes) -> bytes:
 
 def hotp(key: bytes, counter: int, digits: int = 6) -> str:
     counter = counter.to_bytes(8, "big")
-    print(counter)
     hs = hmac_sha1(key, counter)
-    print(hs.hex())
     last_byte = hs[-1]
-    print(last_byte)
     offset = last_byte & 0x0F
-    print(offset)
+    selected_bytes = hs[offset:offset + 4]
+    first_byte = selected_bytes[0] & 0x7F
+    binary_code = (first_byte << 24) | (selected_bytes[1] << 16) | (selected_bytes[2] << 8) | selected_bytes[3]
+    HOTP = binary_code % 10**digits
+    return(f"{HOTP:0{digits}d}")
+
+def totp(key: bytes, timestamp: int, digits: int = 6) -> str:
+    T = timestamp//30
+    return hotp(key,T, digits)
 
 
-hotp(b'1', 1)
-import hmac
-if hmac.digest(b"hello", b"test", "sha1") == hmac_sha1(b"hello", b"test"):
-    print("OK")
-else:
-    print("FAIL")
-if hmac.digest(b"A" * 64, b"test", "sha1") == hmac_sha1(b"A" * 64, b"test"):
-    print("OK")
-else:
-    print("FAIL")
-if hmac.digest(b"A" * 100, b"test", "sha1") == hmac_sha1(b"A" * 100, b"test"):
-    print("OK")
-else:
-    print("FAIL")
+
+
 
 
 
