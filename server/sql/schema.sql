@@ -6,8 +6,18 @@ CREATE TABLE IF NOT EXISTS users (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE
+    two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    totp_secret_ciphertext BYTEA,
+    totp_secret_nonce BYTEA
+);
+
+CREATE TABLE IF NOT EXISTS pending_totp_enrollments (
+    user_id BIGINT PRIMARY KEY REFERENCES users(id),
+    secret_ciphertext BYTEA NOT NULL,
+    secret_nonce BYTEA NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL
 );
 
 GRANT USAGE ON SCHEMA public TO developer;
 GRANT SELECT, INSERT, UPDATE ON users TO developer;
+GRANT SELECT, INSERT, UPDATE, DELETE ON pending_totp_enrollments TO developer;
