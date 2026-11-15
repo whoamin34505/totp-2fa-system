@@ -173,6 +173,24 @@ def get_active_totp_secret(conn, user_id) -> bytes:
         else:
             raise ValueError("Нет такого пользователя")
 
+def authenticate_user(conn, username, password, code):
+    user = get_user(conn, username)
+    if user is None:
+        raise ValueError("Неверный логин или пароль")
+    else:
+        if (verify_password(user[1], password)):
+            print("Первый фактор пройден!")
+            if user[2]:
+                secret = get_active_totp_secret(conn, user[0])
+                if verify_user_totp(conn, user[0], secret, code):
+                    print("Код верный!")
+                    return True
+                else:
+                    raise ValueError("Неправльный код")
+            else:
+                print("тут подключение тотп")
+        else:
+            raise ValueError("Неверный логин или пароль")
 
 
 
@@ -216,7 +234,8 @@ with conn:
     #check()
     #print(verify_user_totp(conn, 16, decrypt_secret(conn, 16),"898120"))
     #confirm_totp_enrollment(conn,17,str(277516))
-    get_active_totp_secret(conn,17)
+    #get_active_totp_secret(conn,17)
+    #authenticate_user(conn, "whoamin","020220071",str(383948))
 
 
 
