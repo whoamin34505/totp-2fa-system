@@ -6,8 +6,11 @@ import base64
 import qrcode
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
 import os
-
+from crypto_core import totp
+import time
+load_dotenv()
 
 issuer="totp-2fa-system"
 
@@ -77,31 +80,75 @@ def save_pending_totp(conn, user_id, ciphertext, nonce):
     with conn.cursor() as cursor:
         cursor.execute("INSERT INTO pending_totp_enrollments (user_id, secret_ciphertext, secret_nonce, expires_at) VALUES (%s, %s, %s, %s)",(user_id,ciphertext,nonce,expires_at))
 
+def get_pending_totp(conn, user_id):
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT secret_ciphertext, secret_nonce, expires_at FROM pending_totp_enrollments WHERE user_id=%s",(user_id,))
+        return cursor.fetchone()
 
-with psycopg.connect("dbname=totp_2fa_system user=developer password=password") as conn:
-    print("Connected to database!")
-    password='020220071'
-    user = get_user(conn, "whoamin")
-    if user is None:
-        print("Неверный логин или пароль")
+def check_expires_at(expires_at):
+    now = datetime.now(timezone.utc)
+    if now<expires_at:
+        return True
     else:
-        if (verify_password(user[1], password)):
-            print("Первый фактор пройден!")
-            if user[2]:
-                print("Требуется TOTP")
-            else:
-                print("TOTP не подключён")
-                id = user[0]
-                secret=generate_totp_secret()
-                aes=generate_aes_key()
-                en_totp=encrypt_totp_secret(aes,secret)
-                save_pending_totp(conn,id,en_totp[0],en_totp[1])
-        else:
-            print("Неверный логин или пароль")
+        return False
 
-# secret=generate_totp_secret()
-# username="whoamin"
-# uri=generate_otpauth_uri(username,secret)
-# if (uri.startswith("otpauth://totp/")):
-#     img = qrcode.make(uri)
-#     img.save(f'{username}.png')
+def decrypt_secret(conn,user_id) -> bytes:
+    pending_totp = get_pending_totp(conn,user_id)
+    if (pending_totp is None):
+        raise ValueError("Нет информации в БД")
+    check_time = check_expires_at(pending_totp[2])
+    if (check_time):
+        secret = decrypt_totp_secret(load_aes_key(),pending_totp[0],pending_totp[1])
+        return secret
+    else:
+        raise ValueError("Срок привязки истёк")
+
+def verify_totp(secret, code):
+    now = int(time.time())
+    server_totp = totp(secret, now)
+    if (server_totp==code):
+        return True
+    else:
+        return False
+
+def check():
+    with conn:
+        print("Connected to database!")
+        password='020220071'
+        username="whoamin"
+        register_user(conn,username,password)
+        user = get_user(conn, username)
+        if user is None:
+            print("Неверный логин или пароль")
+        else:
+            if (verify_password(user[1], password)):
+                print("Первый фактор пройден!")
+                if user[2]:
+                    print("Требуется TOTP")
+                else:
+                    print("TOTP не подключён")
+                    id = user[0]
+                    secret=generate_totp_secret()
+                    print(secret)
+                    uri = generate_otpauth_uri(username, secret)
+                    if (uri.startswith("otpauth://totp/")):
+                        img = qrcode.make(uri)
+                        img.save(f'{username}.png')
+                    aes=load_aes_key()
+                    en_totp=encrypt_totp_secret(aes,secret)
+                    save_pending_totp(conn,id,en_totp[0],en_totp[1])
+            else:
+                print("Неверный логин или пароль")
+
+conn = psycopg.connect(
+    dbname=os.environ["DB_NAME"],
+    user=os.environ["DB_USER"],
+    password=os.environ["DB_PASSWORD"],
+    host=os.environ["DB_HOST"]
+)
+with conn:
+    print(verify_totp(decrypt_secret(conn,15),"999129"))
+    #check()
+
+
+
