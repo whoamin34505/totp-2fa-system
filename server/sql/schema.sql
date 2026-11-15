@@ -19,6 +19,14 @@ CREATE TABLE IF NOT EXISTS pending_totp_enrollments (
     expires_at TIMESTAMPTZ NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS pending_login_attempts (
+    token_hash BYTEA PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used BOOL NOT NULL DEFAULT FALSE,
+    attempts INT DEFAULT 0 NOT NULL
+);
+
 GRANT USAGE ON SCHEMA public TO developer;
 GRANT SELECT, INSERT, UPDATE ON users TO developer;
 GRANT SELECT, INSERT, UPDATE, DELETE ON pending_totp_enrollments TO developer;

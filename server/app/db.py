@@ -1,3 +1,4 @@
+import psycopg
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 import secrets
@@ -10,7 +11,6 @@ from crypto_core import totp
 import time
 load_dotenv()
 
-issuer=os.environ["TOTP_ISSUER"]
 
 def load_aes_key() -> bytes:
     encoded_key = os.environ.get("TOTP_AES_KEY")
@@ -55,6 +55,7 @@ def generate_totp_secret():
     return encoded.decode("ascii")
 
 def generate_otpauth_uri(username, secret):
+    issuer = os.environ["TOTP_ISSUER"]
     otpauth = f"otpauth://totp/{issuer}:{username}?secret={secret}&issuer={issuer}&algorithm=SHA1&digits=6&period=30"
     return otpauth
 
@@ -189,3 +190,11 @@ def authenticate_user(conn, username, password, code):
                 print("тут подключение тотп")
         else:
             raise ValueError("Неверный логин или пароль")
+
+def get_connection():
+    conn = psycopg.connect(
+        dbname=os.environ["DB_NAME"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        host=os.environ["DB_HOST"])
+    return conn
