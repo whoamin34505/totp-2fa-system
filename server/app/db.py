@@ -83,7 +83,7 @@ def save_pending_totp(conn, user_id, ciphertext, nonce):
 
 def get_pending_totp(conn, user_id):
     with conn.cursor() as cursor:
-        cursor.execute("SELECT secret_ciphertext, secret_nonce, expires_at FROM pending_totp_enrollments WHERE user_id=%s",(user_id,))
+        cursor.execute("SELECT secret_ciphertext, secret_nonce, expires_at FROM pending_totp_enrollments WHERE user_id=%s FOR UPDATE",(user_id,))
         return cursor.fetchone()
 
 def check_expires_at(expires_at):
@@ -137,12 +137,13 @@ def confirm_totp_enrollment(conn, user_id, code):
     get_pending_code = get_pending_totp(conn, user_id)
     if (get_pending_code is None):
         raise ValueError("Нет существующей привязки")
-    dectypted_secret = decrypt_secret(conn, user_id)
+    if (check_expires_at(get_pending_code[2]) == False):
+        raise ValueError("Время просрочено")
+    decrypted_secret = decrypt_totp_secret(load_aes_key(),get_pending_code[0],get_pending_code[1])
     with conn.cursor() as cursor:
-        user_totp = verify_user_totp(conn, user_id, dectypted_secret, code)
+        user_totp = verify_user_totp(conn, user_id, decrypted_secret, code)
         if (user_totp == False):
             raise ValueError("Неправильный код")
-
         cursor.execute("UPDATE users SET two_factor_enabled=true, totp_secret_ciphertext=%s, totp_secret_nonce=%s WHERE id=%s AND two_factor_enabled=false",(get_pending_code[0],get_pending_code[1],user_id))
         if cursor.rowcount==1:
             cursor.execute("DELETE FROM pending_totp_enrollments WHERE user_id=%s",(user_id,))
@@ -197,7 +198,7 @@ with conn:
     #print(verify_totp(decrypt_secret(conn,15),"999129"))
     #check()
     #print(verify_user_totp(conn, 16, decrypt_secret(conn, 16),"898120"))
-    confirm_totp_enrollment(conn,16,11111)
+    confirm_totp_enrollment(conn,17,str(277516))
 
 
 
