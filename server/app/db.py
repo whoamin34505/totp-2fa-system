@@ -76,7 +76,8 @@ def decrypt_totp_secret(key, ciphertext, nonce) -> bytes:
     return ciphertext
 
 def save_pending_totp(conn, user_id, ciphertext, nonce):
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    #expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=500)
     with conn.cursor() as cursor:
         cursor.execute("INSERT INTO pending_totp_enrollments (user_id, secret_ciphertext, secret_nonce, expires_at) VALUES (%s, %s, %s, %s)",(user_id,ciphertext,nonce,expires_at))
 
@@ -106,10 +107,56 @@ def decrypt_secret(conn,user_id) -> bytes:
 def verify_totp(secret, code):
     now = int(time.time())
     server_totp = totp(secret, now)
+    server_totp_minus = totp(secret, now-30)
+    server_totp_plus = totp(secret, now+30)
     if (server_totp==code):
+        return now//30
+    elif (server_totp_minus==code):
+        return (now-30)//30
+    elif (server_totp_plus==code):
+        return (now+30)//30
+    else:
+        return None
+
+def protection_replay_attack(conn, user_id, step):
+    with conn.cursor() as cursor:
+        cursor.execute("UPDATE users SET last_accepted_step = %s WHERE (last_accepted_step < %s OR last_accepted_step IS NULL) AND id = %s",(step,step,user_id))
+        if cursor.rowcount==1:
+            return True
+        else:
+            return False
+
+def verify_user_totp(conn, user_id, secret, code):
+    step = verify_totp(secret, code)
+    if (step is not None and protection_replay_attack(conn, user_id, step)):
         return True
     else:
         return False
+
+def confirm_totp_enrollment(conn, user_id, code):
+    get_pending_code = get_pending_totp(conn, user_id)
+    if (get_pending_code is None):
+        raise ValueError("Нет существующей привязки")
+    dectypted_secret = decrypt_secret(conn, user_id)
+    with conn.cursor() as cursor:
+        user_totp = verify_user_totp(conn, user_id, dectypted_secret, code)
+        if (user_totp == False):
+            raise ValueError("Неправильный код")
+
+        cursor.execute("UPDATE users SET two_factor_enabled=true, totp_secret_ciphertext=%s, totp_secret_nonce=%s WHERE id=%s AND two_factor_enabled=false",(get_pending_code[0],get_pending_code[1],user_id))
+        if cursor.rowcount==1:
+            cursor.execute("DELETE FROM pending_totp_enrollments WHERE user_id=%s",(user_id,))
+            if cursor.rowcount==1:
+                return True
+            else:
+                raise ValueError("Ошибка операции")
+        else:
+            raise ValueError("ошибка операции")
+
+
+
+
+
 
 def check():
     with conn:
@@ -147,8 +194,12 @@ conn = psycopg.connect(
     host=os.environ["DB_HOST"]
 )
 with conn:
-    print(verify_totp(decrypt_secret(conn,15),"999129"))
+    #print(verify_totp(decrypt_secret(conn,15),"999129"))
     #check()
+    #print(verify_user_totp(conn, 16, decrypt_secret(conn, 16),"898120"))
+    confirm_totp_enrollment(conn,16,11111)
+
+
 
 
 

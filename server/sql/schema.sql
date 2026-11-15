@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     totp_secret_ciphertext BYTEA,
-    totp_secret_nonce BYTEA
+    totp_secret_nonce BYTEA,
+    last_accepted_step BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS pending_totp_enrollments (
