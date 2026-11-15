@@ -155,6 +155,23 @@ def confirm_totp_enrollment(conn, user_id, code):
             raise ValueError("ошибка операции")
 
 
+def get_active_totp_secret(conn, user_id) -> bytes:
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT two_factor_enabled, totp_secret_ciphertext, totp_secret_nonce FROM users WHERE id=%s",(user_id,))
+        status = cursor.fetchone()
+        if status is not None:
+            if status[0]:
+                if status[1] is not None and status[2] is not None:
+                    totp_secret_ciphertext=status[1]
+                    totp_secret_nonce=status[2]
+                    totp_secret=decrypt_totp_secret(load_aes_key(),totp_secret_ciphertext,totp_secret_nonce)
+                    return totp_secret
+                else:
+                    raise ValueError("Отсутствуют данные для дешифрования")
+            else:
+                raise ValueError("У пользователя отключена 2FA")
+        else:
+            raise ValueError("Нет такого пользователя")
 
 
 
@@ -198,7 +215,8 @@ with conn:
     #print(verify_totp(decrypt_secret(conn,15),"999129"))
     #check()
     #print(verify_user_totp(conn, 16, decrypt_secret(conn, 16),"898120"))
-    confirm_totp_enrollment(conn,17,str(277516))
+    #confirm_totp_enrollment(conn,17,str(277516))
+    get_active_totp_secret(conn,17)
 
 
 
