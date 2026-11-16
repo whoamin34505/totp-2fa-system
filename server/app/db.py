@@ -209,7 +209,7 @@ def save_login_attempt(conn, user_id, token_hash):
 
 def get_login_attempt(conn, token_hash):
     with conn.cursor() as cursor:
-        cursor.execute("SELECT user_id, expires_at, used, attempts FROM pending_login_attempts WHERE token_hash=%s",(token_hash,))
+        cursor.execute("SELECT user_id, expires_at, used, attempts FROM pending_login_attempts WHERE token_hash=%s FOR UPDATE",(token_hash,))
         result = cursor.fetchone()
         return result
 
