@@ -4,6 +4,7 @@ const form = document.getElementById("login-form")
 const totpForm = document.getElementById("totp-form")
 const setupForm = document.getElementById("setup-form");
 const confirmForm = document.getElementById("confirm-form");
+const profilePanel = document.getElementById("profile-panel");
 
 form.addEventListener("submit",function (event) {
     event.preventDefault();
@@ -94,6 +95,30 @@ totpForm.addEventListener("submit", function (event) {
             message.textContent = result.data.message;
             message.style.color = "green";
             sessionToken = result.data.session_token;
+            fetch("/profile", {
+    method: "GET",
+    headers: {
+        "Authorization": "Bearer " + sessionToken
+    }
+})
+.then(function(response) {
+    if (!response.ok) {
+        throw new Error("Ошибка доступа: " + response.status);
+    }
+    return response.json();
+})
+.then(function(data) {
+    profilePanel.hidden = false;
+    form.hidden = true;
+    document.getElementById("welcome-title").hidden = true;
+    document.getElementById("register-link").hidden = true;
+    document.getElementById("login-message").hidden = true;
+    const element = document.getElementById("profile-info");
+    element.textContent = data.message + ". ID пользователя: " + data.user_id;
+})
+.catch(function(error) {
+    console.error("Ошибка получения профиля:", error.message);
+});
             loginToken = null;
             totpForm.hidden = true;
         } else {
@@ -225,4 +250,63 @@ confirmForm.addEventListener("submit", function (event) {
     message.style.color = "red";
     console.error("Ошибка подтверждения:", error);
 });
+});
+
+const logoutButton = document.getElementById("logout-button");
+
+logoutButton.addEventListener("click", function() {
+    if (!sessionToken) {
+        return;
+    }
+
+    fetch("/logout", {
+        method: "POST",
+        headers: {
+            "Authorization": "Bearer " + sessionToken
+        }
+    })
+    .then(function(response) {
+        return response.json().then(function(data) {
+            return {
+                ok: response.ok,
+                data: data
+            };
+        });
+    })
+    .then(function(result) {
+        if (result.ok) {
+            sessionToken = null;
+            loginToken = null;
+
+            profilePanel.hidden = true;
+
+            form.hidden = false;
+            totpForm.hidden = true;
+            setupForm.hidden = true;
+            confirmForm.hidden = true;
+
+            document.getElementById("welcome-title").hidden = false;
+            document.getElementById("register-link").hidden = false;
+
+            const message = document.getElementById("login-message");
+            message.hidden = false;
+            message.textContent = "Вы успешно вышли из аккаунта";
+            message.style.color = "green";
+
+            form.reset();
+            totpForm.reset();
+            confirmForm.reset();
+
+        } else {
+            const info = document.getElementById("profile-info");
+            info.textContent = "Ошибка выхода: " + result.data.detail;
+            info.style.color = "red";
+        }
+    })
+    .catch(function(error) {
+        const info = document.getElementById("profile-info");
+        info.textContent = "Не удалось связаться с сервером. Сессия может оставаться активной.";
+        info.style.color = "red";
+        console.error("Ошибка выхода:", error);
+    });
 });

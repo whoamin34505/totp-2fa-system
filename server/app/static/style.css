@@ -67,6 +67,14 @@ button:hover {
   display: none;
 }
 
+#profile-panel[hidden] {
+  display: none;
+}
+
+form[hidden] {
+    display: none;
+}
+
 #qr-code {
     margin: 20px auto;
 }

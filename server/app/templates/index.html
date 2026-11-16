@@ -8,7 +8,7 @@
     <title>TOTP Authentication</title>
 </head>
 <body>
-    <h1>Добро пожаловать!</h1>
+    <h1 id="welcome-title">Добро пожаловать!</h1>
     <form id="login-form">
         <label for="username">Логин</label>
         <input type="text" name="username" id="username" minlength="3" required>
@@ -44,6 +44,11 @@
     <p id="confirm-message"></p>
 </form>
     <p id="login-message"></p>
-<a href="/register">Еще нет аккаунта? Зарегестрироваться</a>
+<a href="/register" id="register-link">Ещё нет аккаунта? Зарегистрироваться</a>
+<section id="profile-panel" hidden>
+    <h2>Личный кабинет</h2>
+    <p id="profile-info"></p>
+    <button id="logout-button" type="button">Выйти</button>
+</section>
 </body>
 </html>
