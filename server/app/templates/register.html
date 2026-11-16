@@ -2,22 +2,39 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <link rel="stylesheet" href="../static/style.css">
-    <script src="../static/script.js" defer></script>
-    <title>TOTP Authentication</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Регистрация · TOTP Authenticator</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/auth.js" defer></script>
+    <script src="/static/register.js" defer></script>
 </head>
 <body>
-    <h1>Добро пожаловать!</h1>
-    <form id="register-form">
-        <label for="username">Логин</label>
-        <input type="text" name="username" id="username" minlength="3" required>
+<main class="auth">
+    <section id="registration">
+        <h1>Создать аккаунт</h1>
+        <form id="register-form" method="post">
+            <label for="username">Логин</label>
+            <input type="text" name="username" id="username" minlength="3" maxlength="50"
+                   autocomplete="username" aria-describedby="username-hint" required>
+            <p class="hint" id="username-hint">От 3 до 50 символов</p>
 
-        <label for="password">Пароль</label>
-        <input type="password" name="password" id="password" minlength="8" required>
+            <label for="password">Пароль</label>
+            <input type="password" name="password" id="password" minlength="8"
+                   autocomplete="new-password" aria-describedby="password-hint" required>
+            <p class="hint" id="password-hint">Не менее 8 символов</p>
 
-        <button type="submit">Зарегистрироваться</button>
-    </form>
-    <p id="register-message"></p>
-<a href="/">Уже есть аккаунт? Войти</a>
+            <button type="submit">Зарегистрироваться</button>
+        </form>
+        <p class="navigation"><a href="/">Уже есть аккаунт? Войти</a></p>
+    </section>
+
+    <section id="registered" hidden>
+        <h1 class="small-title">Аккаунт создан</h1>
+        <p>Войдите, чтобы подключить двухфакторную аутентификацию.</p>
+        <a class="button" href="/">Перейти ко входу</a>
+    </section>
+
+    <p id="message" class="message" role="status"></p>
+</main>
 </body>
 </html>

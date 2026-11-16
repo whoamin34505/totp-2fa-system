@@ -1,390 +1,182 @@
-let loginToken = null;
-const form = document.getElementById("login-form")
-const totpForm = document.getElementById("totp-form")
-const setupForm = document.getElementById("setup-form");
+const loginForm = document.getElementById("login-form");
+const totpForm = document.getElementById("totp-form");
 const confirmForm = document.getElementById("confirm-form");
-const profilePanel = document.getElementById("profile-panel");
-const setupSuccess = document.getElementById("setup-success");
-const openProfileButton = document.getElementById("open-profile-button");
-const manualSecretContainer = document.getElementById("manual-secret-container");
+const qrCode = document.getElementById("qr-code");
+const qrInstructions = document.getElementById("qr-instructions");
 const manualSecret = document.getElementById("manual-secret");
+const successTitle = document.getElementById("success-title");
+const profileInfo = document.getElementById("profile-info");
 
-function clearSetupDetails() {
-    const qrCode = document.getElementById("qr-code");
-    qrCode.hidden = true;
-    qrCode.replaceChildren();
-    manualSecret.textContent = "";
-    manualSecretContainer.hidden = true;
+let loginToken = null;
+const loadingScreen = document.getElementById("loading");
+let currentScreen = loadingScreen;
+
+function showScreen(id) {
+    const oldScreen = currentScreen;
+    oldScreen.hidden = true;
+    currentScreen = document.getElementById(id);
+    currentScreen.hidden = false;
+    showMessage();
+
+    clearInputs(oldScreen);
+
+    if (oldScreen.id === "confirm") {
+        qrCode.replaceChildren();
+        qrCode.hidden = true;
+        qrInstructions.hidden = true;
+        manualSecret.textContent = "";
+    }
 }
 
-form.addEventListener("submit",function (event) {
-    event.preventDefault();
-    clearSetupDetails();
+async function loadProfile() {
+    const profile = await requestJson("/profile");
+    profileInfo.textContent = "ID пользователя: " + profile.user_id;
+    showScreen("profile");
+}
+
+async function submitLogin() {
+    const result = await requestJson("/login", {
+        username: loginForm.elements.username.value,
+        password: loginForm.elements.password.value
+    });
+
+    loginToken = result.login_token;
+    if (result.next_step === "totp_required") {
+        showScreen("totp");
+    } else {
+        showScreen("setup");
+    }
+}
+
+handleForm(loginForm, submitLogin);
+
+async function submitTotp() {
+    const code = totpForm.elements.code.value;
+    await requestJson("/login/totp", { login_token: loginToken, code: code });
     loginToken = null;
-    totpForm.hidden = true;
-    setupForm.hidden=true;
-    confirmForm.hidden = true;
-    const username = document.getElementById("username").value;
-    const password = document.getElementById("password").value;
-    const data = {
-        username: username,
-        password: password
-    };
-    const jsonData = JSON.stringify(data);
-    fetch('/login', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    body: jsonData
-})
-.then(function(response) {
-    return response.json().then(function(serverData) {
-        return {
-            ok: response.ok,
-            data: serverData
-        };
-    });
-})
-.then(function(result) {
-    const message = document.getElementById("login-message");
 
-    if (result.ok) {
-        loginToken=result.data.login_token;
-        if (result.data.next_step === "totp_required") {
-            message.textContent = "введите код 2фа";
-            totpForm.hidden = false;
-        }
-        else if (result.data.next_step === "totp_setup_required") {
-            message.textContent = "необходимо вкл 2фа";
-            setupForm.hidden=false;
-        }
-        message.style.color = "green";
-    } else {
-        if (Array.isArray(result.data.detail)) {
-            message.textContent = result.data.detail
-                .map(error => error.msg)
-                .join("; ");
-        } else {
-            message.textContent = result.data.detail;
-        }
-
-        message.style.color = "red";
+    try {
+        await loadProfile();
+    } catch (error) {
+        successTitle.textContent = "Вход выполнен";
+        showScreen("success");
+        showMessage(error.message, true);
     }
-})
-.catch(function(error) {
-    console.error('Ошибка запроса:', error);
-});
+}
 
-});
+handleForm(totpForm, submitTotp);
 
-totpForm.addEventListener("submit", function (event) {
-    event.preventDefault();
-    const totp_code = document.getElementById("totp-code").value;
-    const totpData = {
-        login_token: loginToken,
-        code: totp_code
-    };
-    const jsonTotpData = JSON.stringify(totpData);
-    fetch("/login/totp", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: jsonTotpData
-    })
-    .then(function (response) {
-        return response.json().then(function (serverData) {
-            return {
-                ok: response.ok,
-                data: serverData
-            };
-        });
-    })
-    .then(function (result) {
-        const message = document.getElementById("login-message");
-        if (result.ok) {
-            message.textContent = result.data.message;
-            message.style.color = "green";
-            fetch("/profile", {
-    method: "GET",
-    credentials: "same-origin"
-})
-.then(function(response) {
-    if (!response.ok) {
-        throw new Error("Ошибка доступа: " + response.status);
+async function setupTotp() {
+    const result = await requestJson("/2fa/setup", { login_token: loginToken });
+    const url = new URL(result.otpauth_uri);
+    const secret = url.searchParams.get("secret");
+    if (!secret) {
+        throw new Error("Не удалось получить ключ. Попробуйте ещё раз.");
     }
-    return response.json();
-})
-.then(function(data) {
-    profilePanel.hidden = false;
-    form.hidden = true;
-    document.getElementById("welcome-title").hidden = true;
-    document.getElementById("register-link").hidden = true;
-    document.getElementById("login-message").hidden = true;
-    const element = document.getElementById("profile-info");
-    element.textContent = data.message + ". ID пользователя: " + data.user_id;
-})
-.catch(function(error) {
-    console.error("Ошибка получения профиля:", error.message);
-});
-            loginToken = null;
-            totpForm.hidden = true;
-        } else {
-            if (Array.isArray(result.data.detail)) {
-                message.textContent = result.data.detail
-                    .map(error => error.msg)
-                    .join("; ");
-            } else {
-                message.textContent = result.data.detail;
-            }
-            message.style.color = "red";
-        }
-    })
-    .catch(function (error) {
-        const message = document.getElementById("login-message");
-        message.textContent = "Не удалось связаться с сервером";
-        message.style.color = "red";
-        console.error("Ошибка запроса:", error);
-    });
-});
 
-setupForm.addEventListener("submit", function(event) {
-    event.preventDefault();
-
-    const setupData = {
-        login_token: loginToken
-    };
-
-    const jsonSetupData = JSON.stringify(setupData);
-
-    const message = document.getElementById("setup-message");
-    const container = document.getElementById("qr-code");
-
-    clearSetupDetails();
-
-    fetch("/2fa/setup", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: jsonSetupData
-    })
-    .then(function(response) {
-        if (!response.ok) {
-            throw new Error("Ошибка HTTP: " + response.status);
-        }
-
-        return response.json();
-    })
-    .then(function(data) {
-        message.textContent = data.message;
-        message.style.color = "green";
-
-        const otpauthUri = data.otpauth_uri;
-
-        if (!otpauthUri) {
-            throw new Error("Сервер не вернул otpauth_uri");
-        }
-
-        const secret = new URL(otpauthUri).searchParams.get("secret");
-        if (!secret) {
-            throw new Error("Сервер не вернул ключ для ручного ввода");
-        }
-
-        new QRCode(container, {
-            text: otpauthUri,
-            width: 200,
-            height: 200
-        });
-
-        container.hidden = false;
-        manualSecret.textContent = secret;
-        manualSecretContainer.hidden = false;
-
-        confirmForm.hidden = false;
-    })
-    .catch(function(error) {
-        message.textContent = "Не удалось подключить 2FA: " + error.message;
-        message.style.color = "red";
-
-        clearSetupDetails();
-        console.error("Ошибка подключения 2FA:", error.message);
-    });
-});
-
-confirmForm.addEventListener("submit", function (event) {
-    event.preventDefault();
-    const confirmCode = document.getElementById("confirm-code").value;
-    const data = {
-        login_token: loginToken,
-        code: confirmCode
-    };
-    const jsonConfirmData = JSON.stringify(data);
-    fetch('/2fa/confirm', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    body: jsonConfirmData
-}).then(function(response) {
-    return response.json().then(function(serverData) {
-        return {
-            ok: response.ok,
-            data: serverData
-        };
-    });
-})
-.then(function(result) {
-    const message = document.getElementById("confirm-message");
-
-    if (result.ok) {
-        loginToken = null;
-
-        clearSetupDetails();
-
-        setupForm.hidden = true;
-        confirmForm.hidden = true;
-        form.hidden = true;
-        form.reset();
-        confirmForm.reset();
-        document.getElementById("welcome-title").hidden = true;
-        document.getElementById("register-link").hidden = true;
-        document.getElementById("login-message").hidden = true;
-        document.getElementById("setup-success-message").textContent = "";
-        setupSuccess.hidden = false;
-
-    } else {
-        if (Array.isArray(result.data.detail)) {
-            message.textContent = result.data.detail
-                .map(error => error.msg)
-                .join("; ");
-        } else {
-            message.textContent = result.data.detail;
-        }
-
-        message.style.color = "red";
+    manualSecret.textContent = secret;
+    try {
+        new QRCode(qrCode, { text: result.otpauth_uri, width: 184, height: 184 });
+        qrCode.hidden = false;
+        qrInstructions.hidden = false;
+    } catch {
+        qrCode.replaceChildren();
     }
-})
-.catch(function(error) {
-    const message = document.getElementById("confirm-message");
-    message.textContent = "Не удалось связаться с сервером";
-    message.style.color = "red";
-    console.error("Ошибка подтверждения:", error);
-});
-});
 
-openProfileButton.addEventListener("click", function() {
-    const message = document.getElementById("setup-success-message");
-    message.textContent = "";
-    openProfileButton.disabled = true;
-    fetch("/profile", { credentials: "same-origin" })
-        .then(function(response) {
-            if (!response.ok) {
-                throw new Error("Не удалось загрузить профиль");
-            }
-            return response.json();
-        })
-        .then(function(data) {
-            setupSuccess.hidden = true;
-            profilePanel.hidden = false;
-            document.getElementById("profile-info").textContent =
-                data.message + ". ID пользователя: " + data.user_id;
-        })
-        .catch(function() {
-            message.textContent = "Не удалось загрузить профиль. Попробуйте ещё раз или обновите страницу.";
-            message.style.color = "red";
-        })
-        .finally(function() {
-            openProfileButton.disabled = false;
-        });
+    showScreen("confirm");
+}
+
+const setupButton = document.getElementById("setup-button");
+setupButton.addEventListener("click", function () {
+    runAction(setupButton, setupTotp);
 });
 
-const logoutButton = document.getElementById("logout-button");
-
-logoutButton.addEventListener("click", function() {
-    fetch("/logout", {
-        method: "POST",
-        credentials: "same-origin"
-    })
-    .then(function(response) {
-        return response.json().then(function(data) {
-            return {
-                ok: response.ok,
-                data: data
-            };
-        });
-    })
-    .then(function(result) {
-        if (result.ok) {
-            loginToken = null;
-
-            profilePanel.hidden = true;
-
-            form.hidden = false;
-            totpForm.hidden = true;
-            setupForm.hidden = true;
-            confirmForm.hidden = true;
-
-            document.getElementById("welcome-title").hidden = false;
-            document.getElementById("register-link").hidden = false;
-
-            const message = document.getElementById("login-message");
-            message.hidden = false;
-            message.textContent = "Вы успешно вышли из аккаунта";
-            message.style.color = "green";
-
-            form.reset();
-            totpForm.reset();
-            confirmForm.reset();
-
-        } else {
-            const info = document.getElementById("profile-info");
-            info.textContent = "Ошибка выхода: " + result.data.detail;
-            info.style.color = "red";
-        }
-    })
-    .catch(function(error) {
-        const info = document.getElementById("profile-info");
-        info.textContent = "Не удалось связаться с сервером. Сессия может оставаться активной.";
-        info.style.color = "red";
-        console.error("Ошибка выхода:", error);
-    });
-});
-
-fetch("/profile", {
-    method: "GET",
-    credentials: "same-origin"
-})
-.then(function(response) {
-    return response.json().then(function(data) {
-        return {
-            ok: response.ok,
-            data: data
-        };
-    });
-})
-.then(function(result) {
-    if (result.ok) {
-        profilePanel.hidden = false;
-        form.hidden = true;
-        totpForm.hidden = true;
-        setupForm.hidden = true;
-        confirmForm.hidden = true;
-
-        document.getElementById("welcome-title").hidden = true;
-        document.getElementById("register-link").hidden = true;
-        document.getElementById("login-message").hidden = true;
-
-        const profileInfo = document.getElementById("profile-info");
-
-        profileInfo.textContent =
-            result.data.message + ". ID пользователя: " + result.data.user_id;
-
-    } else {
-        console.log("Пользователь не авторизован");
+async function copySecret() {
+    const secret = manualSecret.textContent;
+    let copied;
+    try {
+        await navigator.clipboard.writeText(secret);
+        copied = true;
+    } catch {
+        copied = false;
     }
-})
-.catch(function(error) {
-    console.error("Не удалось проверить сессию:", error);
+
+    if (currentScreen.id !== "confirm" || manualSecret.textContent !== secret) {
+        return;
+    }
+
+    if (copied) {
+        showMessage("Ключ скопирован.");
+        return;
+    }
+
+    const selection = window.getSelection();
+    selection.selectAllChildren(manualSecret);
+    showMessage("Ключ выделен. Скопируйте его вручную.");
+}
+
+document.getElementById("copy-secret").addEventListener("click", copySecret);
+
+async function confirmTotp() {
+    const code = confirmForm.elements.code.value;
+    await requestJson("/2fa/confirm", { login_token: loginToken, code: code });
+
+    loginToken = null;
+    successTitle.textContent = "2FA подключена";
+    showScreen("success");
+}
+
+handleForm(confirmForm, confirmTotp);
+
+function startOver() {
+    loginToken = null;
+    showScreen("login");
+}
+
+const startOverButtons = document.querySelectorAll(".start-over");
+for (const button of startOverButtons) {
+    button.addEventListener("click", startOver);
+}
+
+const openProfileButton = document.getElementById("open-profile");
+openProfileButton.addEventListener("click", function () {
+    runAction(openProfileButton, loadProfile);
 });
+
+async function logout() {
+    try {
+        await requestJson("/logout", {});
+    } catch (error) {
+        if (error.status !== 401) {
+            throw error;
+        }
+    }
+
+    profileInfo.textContent = "";
+    startOver();
+    showMessage("Вы вышли из аккаунта.");
+}
+
+const logoutButton = document.getElementById("logout");
+logoutButton.addEventListener("click", function () {
+    runAction(logoutButton, logout);
+});
+
+async function checkSession() {
+    const loadingTimer = setTimeout(function () {
+        loadingScreen.hidden = false;
+    }, 250);
+
+    try {
+        await loadProfile();
+    } catch (error) {
+        showScreen("login");
+        if (error.status !== 401) {
+            showMessage(error.message, true);
+        }
+    } finally {
+        clearTimeout(loadingTimer);
+    }
+}
+
+checkSession();

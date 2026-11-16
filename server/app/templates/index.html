@@ -2,60 +2,80 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Вход · TOTP Authenticator</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="/static/qrcode.min.js" defer></script>
+    <script src="/static/auth.js" defer></script>
     <script src="/static/login.js" defer></script>
-    <title>TOTP Authentication</title>
 </head>
 <body>
-    <h1 id="welcome-title">Добро пожаловать!</h1>
-    <form id="login-form">
-        <label for="username">Логин</label>
-        <input type="text" name="username" id="username" minlength="3" required>
-        <label for="password">Пароль</label>
-        <input type="password" name="password" id="password" minlength="8" required>
-        <button type="submit">Войти</button>
-    </form>
-    <form id="totp-form" hidden>
-        <label for="totp-code">Код аутентификации</label>
-        <input type="text" id="totp-code" maxlength="6" required inputmode="numeric" autocomplete="one-time-code">
-        <button type="submit">Подтвердить</button>
-    </form>
-    <form id="setup-form" hidden>
-        <button type="submit">Подключить 2FA</button>
-        <p id="setup-message"></p>
-        <div id="qr-code" hidden></div>
-        <p id="manual-secret-container" hidden>Ключ для ручного ввода: <code id="manual-secret"></code></p>
-    </form>
-    <form id="confirm-form" hidden>
-    <label for="confirm-code">Введите код из приложения</label>
-    <input
-        type="text"
-        id="confirm-code"
-        name="code"
-        maxlength="6"
-        minlength="6"
-        pattern="[0-9]{6}"
-        inputmode="numeric"
-        autocomplete="one-time-code"
-        placeholder="000000"
-        required
-    >
-    <button type="submit">Подтвердить подключение</button>
-    <p id="confirm-message"></p>
-</form>
-<section id="setup-success" hidden aria-labelledby="setup-success-title">
-    <h2 id="setup-success-title">Двухфакторная аутентификация подключена</h2>
-    <p>Готово! Теперь для входа потребуется код из приложения-аутентификатора.</p>
-    <button id="open-profile-button" type="button">Перейти в профиль</button>
-    <p id="setup-success-message" role="status"></p>
-</section>
-    <p id="login-message"></p>
-<a href="/register" id="register-link">Ещё нет аккаунта? Зарегистрироваться</a>
-<section id="profile-panel" hidden>
-    <h2>Личный кабинет</h2>
-    <p id="profile-info"></p>
-    <button id="logout-button" type="button">Выйти</button>
-</section>
+<main class="auth">
+    <section id="loading" hidden>
+        <h1>Проверяем сессию…</h1>
+    </section>
+
+    <section id="login" hidden>
+        <h1>Вход в аккаунт</h1>
+        <form id="login-form" method="post">
+            <label for="username">Логин</label>
+            <input type="text" name="username" id="username" autocomplete="username" minlength="3" required>
+
+            <label for="password">Пароль</label>
+            <input type="password" name="password" id="password" autocomplete="current-password" minlength="8" required>
+
+            <button type="submit">Войти</button>
+        </form>
+        <p class="navigation"><a href="/register">Ещё нет аккаунта? Зарегистрироваться</a></p>
+    </section>
+
+    <section id="totp" hidden>
+        <h1>Подтверждение входа</h1>
+        <form id="totp-form" method="post">
+            <label for="totp-code">Шестизначный код из приложения</label>
+            <input type="text" id="totp-code" name="code" maxlength="6"
+                   pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required>
+            <button type="submit">Подтвердить вход</button>
+        </form>
+        <button class="start-over" type="button">Начать заново</button>
+    </section>
+
+    <section id="setup" hidden>
+        <h1>Подключение 2FA</h1>
+        <p>После настройки для входа понадобится код из приложения-аутентификатора.</p>
+        <button id="setup-button" type="button">Получить QR-код</button>
+        <button class="start-over" type="button">Начать заново</button>
+    </section>
+
+    <section id="confirm" hidden>
+        <h1>Добавьте аккаунт</h1>
+        <p id="qr-instructions" hidden>Откройте приложение-аутентификатор и отсканируйте QR-код.</p>
+        <div id="qr-code" role="img" aria-label="QR-код для приложения-аутентификатора" hidden></div>
+
+        <p class="secret">Ключ для ручного ввода <code id="manual-secret"></code></p>
+        <button id="copy-secret" type="button">Скопировать ключ</button>
+
+        <form id="confirm-form" method="post">
+            <label for="confirm-code">Шестизначный код из приложения</label>
+            <input type="text" id="confirm-code" name="code" maxlength="6"
+                   pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required>
+            <button type="submit">Подтвердить подключение</button>
+        </form>
+        <button class="start-over" type="button">Начать заново</button>
+    </section>
+
+    <section id="success" hidden>
+        <h1 class="small-title" id="success-title">2FA подключена</h1>
+        <button id="open-profile" type="button">Перейти в профиль</button>
+    </section>
+
+    <section id="profile" hidden>
+        <h1 class="small-title">Личный кабинет</h1>
+        <p id="profile-info"></p>
+        <button id="logout" type="button">Выйти</button>
+    </section>
+
+    <p id="message" class="message" role="status"></p>
+</main>
 </body>
 </html>

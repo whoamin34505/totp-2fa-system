@@ -9,6 +9,22 @@ body {
     font-family: Arial, sans-serif;
 }
 
+.auth {
+    width: calc(100% - 32px);
+    max-width: 360px;
+    padding: 16px 0;
+}
+
+.auth section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.auth section[hidden] {
+    display: none;
+}
+
 h1 {
     color: #20232a;
     font-size: 26px;
@@ -16,11 +32,21 @@ h1 {
     margin-bottom: 25px;
 }
 
+.small-title {
+    font-size: 22px;
+}
+
+.auth section > p {
+    text-align: center;
+    line-height: 1.5;
+}
+
 form {
     display: flex;
     flex-direction: column;
     gap: 10px;
     width: 260px;
+    max-width: 100%;
 }
 
 label {
@@ -39,67 +65,71 @@ input {
     width: 100%;
 }
 
-button {
+button,
+.button {
     margin-top: 8px;
     padding: 12px;
-    font-size: 14px;
-    font-weight: 500;
+    font: 500 14px Arial, sans-serif;
     color: #20232a;
     background-color: #e1e4e9;
     border: none;
     border-radius: 8px;
     cursor: pointer;
+    text-decoration: none;
 }
 
-button:hover {
+button:hover,
+.button:hover {
     background-color: #cbd0d8;
 }
 
-#totp-form[hidden] {
-  display: none;
+button:disabled {
+    cursor: wait;
 }
 
-#setup-form[hidden] {
-  display: none;
+.hint {
+    margin: -4px 0 0;
+    color: #555;
+    font-size: 13px;
 }
 
-#confirm-form[hidden] {
-  display: none;
-}
-
-#profile-panel[hidden] {
-  display: none;
-}
-
-form[hidden] {
-    display: none;
+.navigation {
+    margin: 24px 0 0;
 }
 
 #qr-code {
-    margin: 20px auto;
+    margin: 4px auto 12px;
+    padding: 16px;
+    background-color: white;
 }
 
-#qr-code[hidden] {
-    display: none;
+#qr-code canvas,
+#qr-code img {
+    max-width: 100%;
+    height: auto;
+}
+
+.secret {
+    margin-bottom: 0;
 }
 
 #manual-secret {
+    display: block;
     overflow-wrap: anywhere;
     user-select: all;
 }
 
-#setup-success {
-    max-width: 360px;
-    margin: 0 20px;
+.message {
+    margin: 16px 0 0;
     text-align: center;
-    line-height: 1.5;
+    color: #246142;
+    font-size: 14px;
 }
 
-#setup-success[hidden] {
-    display: none;
+.message:empty {
+    margin: 0;
 }
 
-#setup-success h2 {
-    color: #20232a;
-    font-size: 22px;
+.message.error {
+    color: #a01e30;
 }
