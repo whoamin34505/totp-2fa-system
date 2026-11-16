@@ -12,6 +12,8 @@ import time
 import hashlib
 load_dotenv()
 
+class InvalidTotpCodeError(ValueError):
+    pass
 
 def load_aes_key() -> bytes:
     encoded_key = os.environ.get("TOTP_AES_KEY")
@@ -79,7 +81,7 @@ def save_pending_totp(conn, user_id, ciphertext, nonce):
     #expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=500)
     with conn.cursor() as cursor:
-        cursor.execute("INSERT INTO pending_totp_enrollments (user_id, secret_ciphertext, secret_nonce, expires_at) VALUES (%s, %s, %s, %s)",(user_id,ciphertext,nonce,expires_at))
+        cursor.execute("INSERT INTO pending_totp_enrollments (user_id, secret_ciphertext, secret_nonce, expires_at) VALUES (%s, %s, %s, %s) ON CONFLICT (user_id) DO UPDATE SET secret_ciphertext = EXCLUDED.secret_ciphertext, secret_nonce = EXCLUDED.secret_nonce, expires_at = EXCLUDED.expires_at",(user_id,ciphertext,nonce,expires_at))
 
 def get_pending_totp(conn, user_id):
     with conn.cursor() as cursor:
@@ -143,7 +145,7 @@ def confirm_totp_enrollment(conn, user_id, code):
     with conn.cursor() as cursor:
         user_totp = verify_user_totp(conn, user_id, decrypted_secret, code)
         if (user_totp == False):
-            raise ValueError("Неправильный код")
+            raise InvalidTotpCodeError("Неправильный код")
         cursor.execute("UPDATE users SET two_factor_enabled=true, totp_secret_ciphertext=%s, totp_secret_nonce=%s WHERE id=%s AND two_factor_enabled=false",(get_pending_code[0],get_pending_code[1],user_id))
         if cursor.rowcount==1:
             cursor.execute("DELETE FROM pending_totp_enrollments WHERE user_id=%s",(user_id,))
@@ -285,6 +287,65 @@ def get_username_by_id(conn, user_id):
         else:
             return None
 
+def get_totp_rate_limit(conn, user_id):
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT failed_attempts, blocked_until FROM totp_rate_limits WHERE user_id=%s FOR UPDATE",(user_id,))
+        return cursor.fetchone()
+
+def create_totp_rate_limit(conn, user_id):
+    with conn.cursor() as cursor:
+        cursor.execute("INSERT INTO totp_rate_limits (user_id) VALUES (%s) ON CONFLICT (user_id) DO NOTHING",(user_id,))
+
+def check_totp_rate_limit(result):
+    if result is None:
+        return True
+    blocked_until = result[1]
+    if blocked_until is None:
+        return True
+    if blocked_until > datetime.now(timezone.utc):
+        return False
+    return True
+
+
+def record_failed_totp_attempt(conn, user_id):
+    create_totp_rate_limit(conn, user_id)
+    failed_attempts, blocked_until = get_totp_rate_limit(conn, user_id)
+    now = datetime.now(timezone.utc)
+    if blocked_until is not None:
+        if blocked_until > now:
+            return False
+        failed_attempts = 0
+    failed_attempts += 1
+    if failed_attempts >= 5:
+        blocked_until = now + timedelta(minutes=15)
+    else:
+        blocked_until = None
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE totp_rate_limits
+            SET failed_attempts = %s,
+                blocked_until = %s
+            WHERE user_id = %s
+            """,
+            (failed_attempts, blocked_until, user_id)
+        )
+    return blocked_until is None
+
+
+def reset_totp_rate_limit(conn, user_id):
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE totp_rate_limits
+            SET failed_attempts = 0,
+                blocked_until = NULL
+            WHERE user_id = %s
+            """,
+            (user_id,)
+        )
+
+
 def get_connection():
     conn = psycopg.connect(
         dbname=os.environ["DB_NAME"],
@@ -292,3 +353,6 @@ def get_connection():
         password=os.environ["DB_PASSWORD"],
         host=os.environ["DB_HOST"])
     return conn
+
+#with get_connection() as conn:
+    #register_user(conn, "kol","020220071")

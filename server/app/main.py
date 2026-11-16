@@ -3,6 +3,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from db import *
 from psycopg.errors import UniqueViolation
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 class RegistrationData(BaseModel):
     username: str = Field(min_length=3,max_length=50)
@@ -31,6 +33,20 @@ class TotpConfirmData(BaseModel):
 bearer = HTTPBearer()
 
 app = FastAPI()
+
+app.mount(
+    "/static",
+    StaticFiles(directory="static"),
+    name="static"
+)
+
+@app.get("/")
+def get_index():
+    return FileResponse("templates/index.html")
+
+@app.get("/register")
+def get_register():
+    return FileResponse("templates/register.html")
 
 @app.get("/status")
 def get_status():
@@ -73,9 +89,14 @@ def login_totp(data: TotpLoginData):
             raise HTTPException(status_code=401, detail="Недействительный или просроченный токен")
         else:
             user_id = get_attempt[0]
+            create_totp_rate_limit(conn, user_id)
+            rate_limit = get_totp_rate_limit(conn, user_id)
+            if not check_totp_rate_limit(rate_limit):
+                raise HTTPException(status_code=429, detail="Слишком много попыток. Попробуйте позже")
             check_totp = verify_totp(get_active_totp_secret(conn,user_id),data.code)
             if check_totp is None:
                 increment_login_attempts(conn, token_hash)
+                record_failed_totp_attempt(conn, user_id)
                 conn.commit()
                 raise HTTPException(status_code=401, detail="Недействительный ТОТП")
             else:
@@ -86,6 +107,7 @@ def login_totp(data: TotpLoginData):
                         session_token = generate_session_token()
                         session_hash = hash_session_token(session_token)
                         save_session(conn, user_id, session_hash)
+                        reset_totp_rate_limit(conn, user_id)
                         return {"message":"Авторизация успешна", "session_token":session_token}
                     else:
                         raise HTTPException(status_code=401, detail="Бурмалда")
@@ -127,6 +149,10 @@ def setup2fa(data: TotpSetupData):
         check_attempt = check_login_attempt(login_attempt)
         if check_attempt:
             user_id = login_attempt[0]
+            create_totp_rate_limit(conn, user_id)
+            rate_limit = get_totp_rate_limit(conn, user_id)
+            if not check_totp_rate_limit(rate_limit):
+                raise HTTPException(status_code=429,detail="Слишком много попыток. Попробуйте позже")
             get_2fa = get_user_2fa(conn, user_id)
             if get_2fa is True:
                 raise HTTPException(status_code=409, detail="2FA уже подключен")
@@ -149,6 +175,7 @@ def setup2fa(data: TotpSetupData):
         else:
             raise HTTPException(status_code=401, detail="Недействительный или просроченный токен")
 
+
 @app.post("/2fa/confirm")
 def confirm2fa(data: TotpConfirmData):
     token = data.login_token
@@ -158,17 +185,26 @@ def confirm2fa(data: TotpConfirmData):
         check_attempt = check_login_attempt(login_attempt)
         if check_attempt:
             user_id = login_attempt[0]
-            get_totp = get_pending_totp(conn, user_id)
-            if get_totp is None:
-                raise HTTPException(status_code=404, detail="Подключение 2FA не начато")
-            get_expires_at = get_totp[2]
-            check_expires = check_expires_at(get_expires_at)
-            if not check_expires:
-                raise HTTPException(status_code=401, detail="Время подключения 2FA истекло")
-            decrypted_secret = decrypt_totp_secret(load_aes_key(),get_totp[0],get_totp[1])
-            verified_totp = verify_totp(decrypted_secret,data.code)
-            if verified_totp is None:
-                raise HTTPException(status_code=401, detail="Недействительный TOTP код")
-            return {"message": "TOTP-код подтверждён"}
+            create_totp_rate_limit(conn, user_id)
+            rate_limit = get_totp_rate_limit(conn, user_id)
+            if not check_totp_rate_limit(rate_limit):
+                raise HTTPException(status_code=429,detail="Слишком много попыток. Попробуйте позже")
+            try:
+                confirmed = confirm_totp_enrollment(conn, user_id, data.code)
+                if confirmed:
+                    check_2fa = consume_login_token(conn, token_hash)
+                    if check_2fa is False:
+                        raise HTTPException(status_code=401, detail="Не удалось подтвердить 2FA")
+                    reset_totp_rate_limit(conn, user_id)
+                    return {"message": "2FA успешно подключена"}
+            except InvalidTotpCodeError:
+                conn.rollback()
+                record_failed_totp_attempt(conn, user_id)
+                increment_login_attempts(conn, token_hash)
+                conn.commit()
+                raise HTTPException(status_code=401, detail="Не удалось подтвердить 2FA")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Не удалось подтвердить 2FA")
+
         else:
             raise HTTPException(status_code=401, detail="Недействительный или просроченный токен")

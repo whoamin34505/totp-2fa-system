@@ -35,11 +35,18 @@ CREATE TABLE IF NOT EXISTS user_sessions (
     revoked_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS totp_rate_limits (
+    user_id BIGINT PRIMARY KEY REFERENCES users(id),
+    failed_attempts INT NOT NULL DEFAULT 0 CHECK (failed_attempts >= 0),
+    blocked_until TIMESTAMPTZ
+);
+
 GRANT USAGE ON SCHEMA public TO developer;
 GRANT SELECT, INSERT, UPDATE ON users TO developer;
 GRANT SELECT, INSERT, UPDATE, DELETE ON pending_totp_enrollments TO developer;
 GRANT SELECT, INSERT, UPDATE, DELETE ON pending_login_attempts TO developer;
 GRANT SELECT, INSERT, UPDATE, DELETE ON user_sessions TO developer;
+GRANT SELECT, INSERT, UPDATE, DELETE ON totp_rate_limits TO developer;
 
 CREATE INDEX IF NOT EXISTS idx_login_attempts_user ON pending_login_attempts(user_id);
 
