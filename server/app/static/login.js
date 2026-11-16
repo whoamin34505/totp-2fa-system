@@ -4,9 +4,22 @@ const totpForm = document.getElementById("totp-form")
 const setupForm = document.getElementById("setup-form");
 const confirmForm = document.getElementById("confirm-form");
 const profilePanel = document.getElementById("profile-panel");
+const setupSuccess = document.getElementById("setup-success");
+const openProfileButton = document.getElementById("open-profile-button");
+const manualSecretContainer = document.getElementById("manual-secret-container");
+const manualSecret = document.getElementById("manual-secret");
+
+function clearSetupDetails() {
+    const qrCode = document.getElementById("qr-code");
+    qrCode.hidden = true;
+    qrCode.replaceChildren();
+    manualSecret.textContent = "";
+    manualSecretContainer.hidden = true;
+}
 
 form.addEventListener("submit",function (event) {
     event.preventDefault();
+    clearSetupDetails();
     loginToken = null;
     totpForm.hidden = true;
     setupForm.hidden=true;
@@ -93,7 +106,6 @@ totpForm.addEventListener("submit", function (event) {
         if (result.ok) {
             message.textContent = result.data.message;
             message.style.color = "green";
-            sessionToken = result.data.session_token;
             fetch("/profile", {
     method: "GET",
     credentials: "same-origin"
@@ -149,8 +161,7 @@ setupForm.addEventListener("submit", function(event) {
     const message = document.getElementById("setup-message");
     const container = document.getElementById("qr-code");
 
-    container.hidden = true;
-    container.replaceChildren();
+    clearSetupDetails();
 
     fetch("/2fa/setup", {
         method: "POST",
@@ -176,6 +187,11 @@ setupForm.addEventListener("submit", function(event) {
             throw new Error("Сервер не вернул otpauth_uri");
         }
 
+        const secret = new URL(otpauthUri).searchParams.get("secret");
+        if (!secret) {
+            throw new Error("Сервер не вернул ключ для ручного ввода");
+        }
+
         new QRCode(container, {
             text: otpauthUri,
             width: 200,
@@ -183,6 +199,8 @@ setupForm.addEventListener("submit", function(event) {
         });
 
         container.hidden = false;
+        manualSecret.textContent = secret;
+        manualSecretContainer.hidden = false;
 
         confirmForm.hidden = false;
     })
@@ -190,7 +208,7 @@ setupForm.addEventListener("submit", function(event) {
         message.textContent = "Не удалось подключить 2FA: " + error.message;
         message.style.color = "red";
 
-        container.hidden = true;
+        clearSetupDetails();
         console.error("Ошибка подключения 2FA:", error.message);
     });
 });
@@ -223,11 +241,18 @@ confirmForm.addEventListener("submit", function (event) {
     if (result.ok) {
         loginToken = null;
 
+        clearSetupDetails();
+
         setupForm.hidden = true;
         confirmForm.hidden = true;
-        const loginMessage = document.getElementById("login-message");
-        loginMessage.textContent = "2FA успешно подключена! Войдите заново.";
-        loginMessage.style.color = "green";
+        form.hidden = true;
+        form.reset();
+        confirmForm.reset();
+        document.getElementById("welcome-title").hidden = true;
+        document.getElementById("register-link").hidden = true;
+        document.getElementById("login-message").hidden = true;
+        document.getElementById("setup-success-message").textContent = "";
+        setupSuccess.hidden = false;
 
     } else {
         if (Array.isArray(result.data.detail)) {
@@ -249,6 +274,32 @@ confirmForm.addEventListener("submit", function (event) {
 });
 });
 
+openProfileButton.addEventListener("click", function() {
+    const message = document.getElementById("setup-success-message");
+    message.textContent = "";
+    openProfileButton.disabled = true;
+    fetch("/profile", { credentials: "same-origin" })
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error("Не удалось загрузить профиль");
+            }
+            return response.json();
+        })
+        .then(function(data) {
+            setupSuccess.hidden = true;
+            profilePanel.hidden = false;
+            document.getElementById("profile-info").textContent =
+                data.message + ". ID пользователя: " + data.user_id;
+        })
+        .catch(function() {
+            message.textContent = "Не удалось загрузить профиль. Попробуйте ещё раз или обновите страницу.";
+            message.style.color = "red";
+        })
+        .finally(function() {
+            openProfileButton.disabled = false;
+        });
+});
+
 const logoutButton = document.getElementById("logout-button");
 
 logoutButton.addEventListener("click", function() {
@@ -266,7 +317,6 @@ logoutButton.addEventListener("click", function() {
     })
     .then(function(result) {
         if (result.ok) {
-            sessionToken = null;
             loginToken = null;
 
             profilePanel.hidden = true;

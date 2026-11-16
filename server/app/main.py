@@ -119,9 +119,9 @@ def login_totp(data: TotpLoginData, response: Response):
                         )
                         return {"message":"Авторизация успешна"}
                     else:
-                        raise HTTPException(status_code=401, detail="Бурмалда")
+                        raise HTTPException(status_code=401, detail="Недействительный или просроченный токен. Войдите заново")
                 else:
-                    raise HTTPException(status_code=401, detail="Бурмалда")
+                    raise HTTPException(status_code=401, detail="Код уже использован. Дождитесь нового кода")
 
 @app.get("/profile")
 def profile(request: Request):
@@ -138,6 +138,10 @@ def profile(request: Request):
 
 @app.post("/logout")
 def logout(request: Request, response: Response):
+    origin = request.headers.get("Origin")
+    if origin != "http://127.0.0.1:8000":
+        raise HTTPException(status_code=403, detail="Недопустимый источник запроса")
+
     token = request.cookies.get("session")
     if token is None:
         raise HTTPException(status_code=401, detail="Недействительная или просроченная сессия")
@@ -195,7 +199,7 @@ def setup2fa(data: TotpSetupData):
 
 
 @app.post("/2fa/confirm")
-def confirm2fa(data: TotpConfirmData):
+def confirm2fa(data: TotpConfirmData, response: Response):
     token = data.login_token
     token_hash = hash_login_token(token)
     with get_connection() as conn:
@@ -213,8 +217,20 @@ def confirm2fa(data: TotpConfirmData):
                     check_2fa = consume_login_token(conn, token_hash)
                     if check_2fa is False:
                         raise HTTPException(status_code=401, detail="Не удалось подтвердить 2FA")
+                    session_token = generate_session_token()
+                    save_session(conn, user_id, hash_session_token(session_token))
                     reset_totp_rate_limit(conn, user_id)
+                    response.set_cookie(
+                        key="session",
+                        value=session_token,
+                        httponly=True,
+                        secure=False,
+                        samesite="strict",
+                        max_age=86400,
+                        path="/"
+                    )
                     return {"message": "2FA успешно подключена"}
+                raise HTTPException(status_code=401, detail="Не удалось подтвердить 2FA")
             except InvalidTotpCodeError:
                 conn.rollback()
                 record_failed_totp_attempt(conn, user_id)

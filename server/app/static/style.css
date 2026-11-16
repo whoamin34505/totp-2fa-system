@@ -82,3 +82,24 @@ form[hidden] {
 #qr-code[hidden] {
     display: none;
 }
+
+#manual-secret {
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
+#setup-success {
+    max-width: 360px;
+    margin: 0 20px;
+    text-align: center;
+    line-height: 1.5;
+}
+
+#setup-success[hidden] {
+    display: none;
+}
+
+#setup-success h2 {
+    color: #20232a;
+    font-size: 22px;
+}
