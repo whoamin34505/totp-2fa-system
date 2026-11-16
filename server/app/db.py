@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import os
 from crypto_core import totp
 import time
+import hashlib
 load_dotenv()
 
 
@@ -190,6 +191,44 @@ def authenticate_user(conn, username, password, code):
                 print("тут подключение тотп")
         else:
             raise ValueError("Неверный логин или пароль")
+
+def generate_login_token():
+    token = secrets.token_bytes(20)
+    encoded = base64.b32encode(token)
+    return encoded.decode("ascii")
+
+def hash_login_token(token: str) -> bytes:
+    return hashlib.sha256(token.encode("ascii")).digest()
+
+def save_login_attempt(conn, user_id, token_hash):
+    with conn.cursor() as cursor:
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+        cursor.execute("INSERT INTO pending_login_attempts (token_hash, user_id, expires_at) VALUES (%s, %s, %s)",(token_hash,user_id,expires_at))
+        if cursor.rowcount!=1:
+            raise ValueError("Ошибка при добавлении записи")
+
+def get_login_attempt(conn, token_hash):
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT user_id, expires_at, used, attempts FROM pending_login_attempts WHERE token_hash=%s",(token_hash,))
+        result = cursor.fetchone()
+        return result
+
+def check_login_attempt(result):
+    now = datetime.now(timezone.utc)
+    if (result is None) or (result[1] <= now) or (result[2] is True) or (result[3] >= 5):
+        return False
+    else:
+        return True
+
+def increment_login_attempts(conn, token_hash):
+    with conn.cursor() as cursor:
+        cursor.execute("UPDATE pending_login_attempts SET attempts = attempts + 1 WHERE token_hash = %s AND attempts < 5 AND used = FALSE AND expires_at > NOW()",(token_hash,))
+        return cursor.rowcount == 1
+
+def consume_login_token(conn, token_hash):
+    with conn.cursor() as cursor:
+        cursor.execute("UPDATE pending_login_attempts SET used=TRUE WHERE token_hash=%s AND used=FALSE and attempts < 5 AND expires_at > NOW()",(token_hash,))
+        return cursor.rowcount == 1
 
 def get_connection():
     conn = psycopg.connect(

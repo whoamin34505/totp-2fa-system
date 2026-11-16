@@ -21,12 +21,17 @@ CREATE TABLE IF NOT EXISTS pending_totp_enrollments (
 
 CREATE TABLE IF NOT EXISTS pending_login_attempts (
     token_hash BYTEA PRIMARY KEY,
-    user_id BIGINT REFERENCES users(id) NOT NULL,
+    user_id BIGINT NOT NULL REFERENCES users(id),
     expires_at TIMESTAMPTZ NOT NULL,
-    used BOOL NOT NULL DEFAULT FALSE,
-    attempts INT DEFAULT 0 NOT NULL
+    used BOOLEAN NOT NULL DEFAULT FALSE,
+    attempts INT NOT NULL DEFAULT 0 CHECK (attempts >= 0)
 );
 
 GRANT USAGE ON SCHEMA public TO developer;
 GRANT SELECT, INSERT, UPDATE ON users TO developer;
 GRANT SELECT, INSERT, UPDATE, DELETE ON pending_totp_enrollments TO developer;
+GRANT SELECT, INSERT, UPDATE, DELETE ON pending_login_attempts TO developer;
+
+CREATE INDEX IF NOT EXISTS idx_login_attempts_user ON pending_login_attempts(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_login_attempts_expires ON pending_login_attempts(expires_at);
