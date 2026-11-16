@@ -78,8 +78,8 @@ def decrypt_totp_secret(key, ciphertext, nonce) -> bytes:
     return ciphertext
 
 def save_pending_totp(conn, user_id, ciphertext, nonce):
-    #expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=500)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    #expires_at = datetime.now(timezone.utc) + timedelta(minutes=500)
     with conn.cursor() as cursor:
         cursor.execute("INSERT INTO pending_totp_enrollments (user_id, secret_ciphertext, secret_nonce, expires_at) VALUES (%s, %s, %s, %s) ON CONFLICT (user_id) DO UPDATE SET secret_ciphertext = EXCLUDED.secret_ciphertext, secret_nonce = EXCLUDED.secret_nonce, expires_at = EXCLUDED.expires_at",(user_id,ciphertext,nonce,expires_at))
 
