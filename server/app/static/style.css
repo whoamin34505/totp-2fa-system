@@ -54,3 +54,23 @@ button {
 button:hover {
     background-color: #cbd0d8;
 }
+
+#totp-form[hidden] {
+  display: none;
+}
+
+#setup-form[hidden] {
+  display: none;
+}
+
+#confirm-form[hidden] {
+  display: none;
+}
+
+#qr-code {
+    margin: 20px auto;
+}
+
+#qr-code[hidden] {
+    display: none;
+}

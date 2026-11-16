@@ -2,20 +2,48 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <link rel="stylesheet" href="../static/style.css">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/qrcode.min.js" defer></script>
+    <script src="/static/login.js" defer></script>
     <title>TOTP Authentication</title>
 </head>
 <body>
     <h1>Добро пожаловать!</h1>
-    <form>
+    <form id="login-form">
         <label for="username">Логин</label>
-        <input type="text" name="username" id="username" placeholder="Введите логин" required>
-
+        <input type="text" name="username" id="username" minlength="3" required>
         <label for="password">Пароль</label>
-        <input type="password" name="password" id="password" placeholder="Введите пароль" required>
-
+        <input type="password" name="password" id="password" minlength="8" required>
         <button type="submit">Войти</button>
     </form>
-<a href="/register">Нет аккаунта? Зарегистрироваться</a>
+    <form id="totp-form" hidden>
+        <label for="totp-code">Код аутентификации</label>
+        <input type="text" id="totp-code" maxlength="6" required inputmode="numeric" autocomplete="one-time-code">
+        <button type="submit">Подтвердить</button>
+    </form>
+    <form id="setup-form" hidden>
+        <button type="submit">Подключить 2FA</button>
+        <p id="setup-message"></p>
+        <div id="qr-code" hidden></div>
+    </form>
+    <form id="confirm-form" hidden>
+    <label for="confirm-code">Введите код из приложения</label>
+    <input
+        type="text"
+        id="confirm-code"
+        name="code"
+        maxlength="6"
+        minlength="6"
+        pattern="[0-9]{6}"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        placeholder="000000"
+        required
+    >
+    <button type="submit">Подтвердить подключение</button>
+    <p id="confirm-message"></p>
+</form>
+    <p id="login-message"></p>
+<a href="/register">Еще нет аккаунта? Зарегестрироваться</a>
 </body>
 </html>

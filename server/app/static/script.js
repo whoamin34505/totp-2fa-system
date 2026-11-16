@@ -25,10 +25,21 @@ form.addEventListener("submit",function (event) {
     });
 })
 .then(function(result) {
+    const message = document.getElementById("register-message");
+
     if (result.ok) {
-        console.log('Успех:', result.data.message);
+        message.textContent = result.data.message;
+        message.style.color = "green";
     } else {
-        console.log('Ошибка:', result.data.detail);
+        if (Array.isArray(result.data.detail)) {
+            message.textContent = result.data.detail
+                .map(error => error.msg)
+                .join("; ");
+        } else {
+            message.textContent = result.data.detail;
+        }
+
+        message.style.color = "red";
     }
 })
 .catch(function(error) {

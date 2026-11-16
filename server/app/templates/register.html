@@ -10,13 +10,14 @@
     <h1>Добро пожаловать!</h1>
     <form id="register-form">
         <label for="username">Логин</label>
-        <input type="text" name="username" id="username" placeholder="Введите логин" required>
+        <input type="text" name="username" id="username" minlength="3" required>
 
         <label for="password">Пароль</label>
-        <input type="password" name="password" id="password" placeholder="Введите пароль" required>
+        <input type="password" name="password" id="password" minlength="8" required>
 
         <button type="submit">Зарегистрироваться</button>
     </form>
+    <p id="register-message"></p>
 <a href="/">Уже есть аккаунт? Войти</a>
 </body>
 </html>
