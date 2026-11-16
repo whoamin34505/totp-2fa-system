@@ -78,7 +78,17 @@ async function setupTotp() {
 
     manualSecret.textContent = secret;
     try {
-        new QRCode(qrCode, { text: result.otpauth_uri, width: 184, height: 184 });
+        const qr = new QRCodeStyling({
+            data: result.otpauth_uri,
+            width: 200,
+            height: 200,
+            type: "canvas",
+            margin: 8,
+            dotsOptions: { type: "rounded", color: "#202938" },
+            cornersSquareOptions: { type: "extra-rounded", color: "#202938" },
+            cornersDotOptions: { type: "square", color: "#202938" }
+        });
+        qr.append(qrCode);
         qrCode.hidden = false;
         qrInstructions.hidden = false;
     } catch {

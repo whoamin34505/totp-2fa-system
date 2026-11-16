@@ -41,6 +41,13 @@ h1 {
     line-height: 1.5;
 }
 
+.step-indicator {
+    margin: -12px 0 8px;
+    color: #596273;
+    font-size: 13px;
+    font-weight: 600;
+}
+
 form {
     display: flex;
     flex-direction: column;
@@ -101,10 +108,13 @@ button:disabled {
     margin: 4px auto 12px;
     padding: 16px;
     background-color: white;
+    border: 1px solid #cbd0d8;
+    border-radius: 16px;
+    box-shadow: 0 6px 18px rgba(32, 35, 42, 0.08);
 }
 
-#qr-code canvas,
-#qr-code img {
+#qr-code canvas {
+    display: block;
     max-width: 100%;
     height: auto;
 }
@@ -137,6 +147,14 @@ button:disabled {
 #copy-message {
     min-height: 1.5em;
     margin: 4px 0 0;
+}
+
+#copy-message:not(:empty) {
+    padding: 8px 12px;
+    color: #246142;
+    background-color: #eaf5ee;
+    border-radius: 8px;
+    font-weight: 600;
 }
 
 @media (max-width: 600px), (pointer: coarse) {

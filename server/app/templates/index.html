@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Вход · TOTP Authenticator</title>
     <link rel="stylesheet" href="/static/style.css">
-    <script src="/static/qrcode.min.js" defer></script>
+    <script src="/static/qr-code-styling.min.js" defer></script>
     <script src="/static/auth.js" defer></script>
     <script src="/static/login.js" defer></script>
 </head>
@@ -42,6 +42,7 @@
 
     <section id="setup" hidden>
         <h1>Подключение 2FA</h1>
+        <p class="step-indicator">Шаг 1 из 2 · Подготовка</p>
         <p>После настройки для входа понадобится код из приложения-аутентификатора.</p>
         <button id="setup-button" type="button">Получить QR-код</button>
         <button class="start-over" type="button">Начать заново</button>
@@ -49,6 +50,7 @@
 
     <section id="confirm" hidden>
         <h1>Добавьте аккаунт</h1>
+        <p class="step-indicator">Шаг 2 из 2 · Подтверждение</p>
         <p id="qr-instructions" hidden>Откройте приложение-аутентификатор и отсканируйте QR-код.</p>
         <div id="qr-code" role="img" aria-label="QR-код для приложения-аутентификатора" hidden></div>
 
