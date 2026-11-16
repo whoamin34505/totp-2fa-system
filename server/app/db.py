@@ -230,6 +230,61 @@ def consume_login_token(conn, token_hash):
         cursor.execute("UPDATE pending_login_attempts SET used=TRUE WHERE token_hash=%s AND used=FALSE and attempts < 5 AND expires_at > NOW()",(token_hash,))
         return cursor.rowcount == 1
 
+def generate_session_token():
+    token = secrets.token_bytes(32)
+    encoded = base64.b32encode(token)
+    return encoded.decode("ascii")
+
+def hash_session_token(token: str) -> bytes:
+    return hashlib.sha256(token.encode("ascii")).digest()
+
+def save_session(conn, user_id, token_hash):
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+    with conn.cursor() as cursor:
+        cursor.execute("INSERT INTO user_sessions (token_hash, user_id, expires_at) VALUES (%s, %s, %s)",(token_hash,user_id,expires_at))
+
+def get_session(conn, token_hash):
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT user_id, expires_at, revoked_at FROM user_sessions WHERE token_hash=%s",(token_hash,))
+        result=cursor.fetchone()
+        return result
+
+def check_session(result):
+    now = datetime.now(timezone.utc)
+    if (result is None) or (result[1] <= now) or (result[2] is not None):
+        return False
+    else:
+        return True
+
+def revoke_session(conn, token_hash):
+    with conn.cursor() as cursor:
+        cursor.execute("UPDATE user_sessions SET revoked_at=NOW() WHERE token_hash=%s AND revoked_at IS NULL",(token_hash,))
+        if cursor.rowcount==1:
+            return True
+        else:
+            return False
+
+def get_user_2fa(conn, user_id):
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT two_factor_enabled FROM USERS WHERE id=%s", (user_id,))
+        result = cursor.fetchone()
+        if result is not None:
+            if result[0] is True:
+                return True
+            else:
+                return False
+        else:
+            return None
+
+def get_username_by_id(conn, user_id):
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT username FROM users WHERE id = %s",(user_id,))
+        result = cursor.fetchone()
+        if result is not None:
+            return result[0]
+        else:
+            return None
+
 def get_connection():
     conn = psycopg.connect(
         dbname=os.environ["DB_NAME"],
