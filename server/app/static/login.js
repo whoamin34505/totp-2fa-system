@@ -1,5 +1,4 @@
 let loginToken = null;
-let sessionToken = null;
 const form = document.getElementById("login-form")
 const totpForm = document.getElementById("totp-form")
 const setupForm = document.getElementById("setup-form");
@@ -97,9 +96,7 @@ totpForm.addEventListener("submit", function (event) {
             sessionToken = result.data.session_token;
             fetch("/profile", {
     method: "GET",
-    headers: {
-        "Authorization": "Bearer " + sessionToken
-    }
+    credentials: "same-origin"
 })
 .then(function(response) {
     if (!response.ok) {
@@ -255,15 +252,9 @@ confirmForm.addEventListener("submit", function (event) {
 const logoutButton = document.getElementById("logout-button");
 
 logoutButton.addEventListener("click", function() {
-    if (!sessionToken) {
-        return;
-    }
-
     fetch("/logout", {
         method: "POST",
-        headers: {
-            "Authorization": "Bearer " + sessionToken
-        }
+        credentials: "same-origin"
     })
     .then(function(response) {
         return response.json().then(function(data) {
@@ -309,4 +300,41 @@ logoutButton.addEventListener("click", function() {
         info.style.color = "red";
         console.error("Ошибка выхода:", error);
     });
+});
+
+fetch("/profile", {
+    method: "GET",
+    credentials: "same-origin"
+})
+.then(function(response) {
+    return response.json().then(function(data) {
+        return {
+            ok: response.ok,
+            data: data
+        };
+    });
+})
+.then(function(result) {
+    if (result.ok) {
+        profilePanel.hidden = false;
+        form.hidden = true;
+        totpForm.hidden = true;
+        setupForm.hidden = true;
+        confirmForm.hidden = true;
+
+        document.getElementById("welcome-title").hidden = true;
+        document.getElementById("register-link").hidden = true;
+        document.getElementById("login-message").hidden = true;
+
+        const profileInfo = document.getElementById("profile-info");
+
+        profileInfo.textContent =
+            result.data.message + ". ID пользователя: " + result.data.user_id;
+
+    } else {
+        console.log("Пользователь не авторизован");
+    }
+})
+.catch(function(error) {
+    console.error("Не удалось проверить сессию:", error);
 });

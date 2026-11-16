@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Response, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from db import *
@@ -80,7 +80,7 @@ def login(data: LoginData):
                 raise HTTPException(status_code=401, detail="Неверный логин или пароль")
 
 @app.post("/login/totp", status_code=200)
-def login_totp(data: TotpLoginData):
+def login_totp(data: TotpLoginData, response: Response):
     with get_connection() as conn:
         token_hash = hash_login_token(data.login_token)
         get_attempt = get_login_attempt(conn, token_hash)
@@ -108,15 +108,26 @@ def login_totp(data: TotpLoginData):
                         session_hash = hash_session_token(session_token)
                         save_session(conn, user_id, session_hash)
                         reset_totp_rate_limit(conn, user_id)
-                        return {"message":"Авторизация успешна", "session_token":session_token}
+                        response.set_cookie(
+                            key="session",
+                            value=session_token,
+                            httponly=True,
+                            secure=False,
+                            samesite="strict",
+                            max_age=86400,
+                            path="/"
+                        )
+                        return {"message":"Авторизация успешна"}
                     else:
                         raise HTTPException(status_code=401, detail="Бурмалда")
                 else:
                     raise HTTPException(status_code=401, detail="Бурмалда")
 
 @app.get("/profile")
-def profile(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
-    token = credentials.credentials
+def profile(request: Request):
+    token = request.cookies.get("session")
+    if token is None:
+        raise HTTPException(status_code=401, detail="Недействительная или просроченная сессия")
     hash_token = hash_session_token(token)
     with get_connection() as conn:
         session = get_session(conn, hash_token)
@@ -126,14 +137,21 @@ def profile(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
             raise HTTPException(status_code=401, detail="Недействительная или просроченная сессия")
 
 @app.post("/logout")
-def logout(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
-    token = credentials.credentials
+def logout(request: Request, response: Response):
+    token = request.cookies.get("session")
+    if token is None:
+        raise HTTPException(status_code=401, detail="Недействительная или просроченная сессия")
     hash_token = hash_session_token(token)
     with get_connection() as conn:
         session = get_session(conn, hash_token)
         if check_session(session):
             revoke = revoke_session(conn, hash_token)
             if revoke:
+                response.delete_cookie(
+                    key="session",
+                    path="/",
+                    samesite="strict"
+                )
                 return {"user_id":session[0], "message":"Выход выполнен"}
             else:
                 raise HTTPException(status_code=401, detail="Ошибка выхода")
