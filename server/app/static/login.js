@@ -4,6 +4,7 @@ const confirmForm = document.getElementById("confirm-form");
 const qrCode = document.getElementById("qr-code");
 const qrInstructions = document.getElementById("qr-instructions");
 const manualSecret = document.getElementById("manual-secret");
+const copyMessage = document.getElementById("copy-message");
 const successTitle = document.getElementById("success-title");
 const profileInfo = document.getElementById("profile-info");
 
@@ -25,6 +26,7 @@ function showScreen(id) {
         qrCode.hidden = true;
         qrInstructions.hidden = true;
         manualSecret.textContent = "";
+        copyMessage.textContent = "";
     }
 }
 
@@ -106,13 +108,13 @@ async function copySecret() {
     }
 
     if (copied) {
-        showMessage("Ключ скопирован.");
+        copyMessage.textContent = "Ключ скопирован.";
         return;
     }
 
     const selection = window.getSelection();
     selection.selectAllChildren(manualSecret);
-    showMessage("Ключ выделен. Скопируйте его вручную.");
+    copyMessage.textContent = "Ключ выделен. Скопируйте его.";
 }
 
 document.getElementById("copy-secret").addEventListener("click", copySecret);

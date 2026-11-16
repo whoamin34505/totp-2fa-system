@@ -133,3 +133,43 @@ button:disabled {
 .message.error {
     color: #a01e30;
 }
+
+#copy-message {
+    min-height: 1.5em;
+    margin: 4px 0 0;
+}
+
+@media (max-width: 600px), (pointer: coarse) {
+    body {
+        min-height: 100svh;
+    }
+
+    form {
+        width: 100%;
+    }
+
+    input,
+    button,
+    .button {
+        min-height: 44px;
+        font-size: 16px;
+    }
+
+    button,
+    .button {
+        box-sizing: border-box;
+        width: 100%;
+        text-align: center;
+    }
+
+    .navigation a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+    }
+
+    #qr-code {
+        box-sizing: border-box;
+        max-width: 100%;
+    }
+}
