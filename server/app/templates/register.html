@@ -15,8 +15,8 @@
         <form id="register-form" method="post">
             <label for="username">Логин</label>
             <input type="text" name="username" id="username" minlength="3" maxlength="50"
-                   autocomplete="username" aria-describedby="username-hint" required>
-            <p class="hint" id="username-hint">От 3 до 50 символов</p>
+                   pattern="[A-Za-z0-9_.\-]+" autocomplete="username" aria-describedby="username-hint" required>
+            <p class="hint" id="username-hint">От 3 до 50 символов: латинские буквы, цифры, точка, дефис и подчёркивание</p>
 
             <label for="password">Пароль</label>
             <input type="password" name="password" id="password" minlength="8"
