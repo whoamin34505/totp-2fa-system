@@ -104,6 +104,12 @@ button:disabled {
     margin: 24px 0 0;
 }
 
+#profile p {
+    margin: 6px 0;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+}
+
 #qr-code {
     margin: 4px auto 12px;
     padding: 16px;

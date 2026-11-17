@@ -7,6 +7,8 @@ const manualSecret = document.getElementById("manual-secret");
 const copyMessage = document.getElementById("copy-message");
 const successTitle = document.getElementById("success-title");
 const profileInfo = document.getElementById("profile-info");
+const profileUsername = document.getElementById("profile-username");
+const profile2fa = document.getElementById("profile-2fa");
 
 let loginToken = null;
 const loadingScreen = document.getElementById("loading");
@@ -33,6 +35,10 @@ function showScreen(id) {
 async function loadProfile() {
     const profile = await requestJson("/profile");
     profileInfo.textContent = "ID пользователя: " + profile.user_id;
+    profileUsername.textContent = "Логин: " + profile.username;
+    profile2fa.textContent = profile.two_factor_enabled
+        ? "Двухфакторная аутентификация подключена"
+        : "Двухфакторная аутентификация не подключена";
     showScreen("profile");
 }
 
@@ -165,6 +171,8 @@ async function logout() {
     }
 
     profileInfo.textContent = "";
+    profileUsername.textContent = "";
+    profile2fa.textContent = "";
     startOver();
     showMessage("Вы вышли из аккаунта.");
 }

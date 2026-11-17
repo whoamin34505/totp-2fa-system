@@ -139,7 +139,15 @@ def profile(request: Request):
     with get_connection() as conn:
         session = get_session(conn, hash_token)
         if check_session(session):
-            return {"user_id":session[0], "message":"Доступ разрешен"}
+            user = get_user_profile(conn, session[0])
+            if user is None:
+                raise HTTPException(status_code=401, detail="Недействительная или просроченная сессия")
+            return {
+                "user_id": session[0],
+                "username": user[0],
+                "two_factor_enabled": user[1],
+                "message": "Доступ разрешен"
+            }
         else:
             raise HTTPException(status_code=401, detail="Недействительная или просроченная сессия")
 

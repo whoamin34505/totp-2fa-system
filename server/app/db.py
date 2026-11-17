@@ -290,6 +290,11 @@ def get_username_by_id(conn, user_id):
         else:
             return None
 
+def get_user_profile(conn, user_id):
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT username, two_factor_enabled FROM users WHERE id=%s", (user_id,))
+        return cursor.fetchone()
+
 def get_totp_rate_limit(conn, user_id):
     with conn.cursor() as cursor:
         cursor.execute("SELECT failed_attempts, blocked_until FROM totp_rate_limits WHERE user_id=%s FOR UPDATE",(user_id,))
