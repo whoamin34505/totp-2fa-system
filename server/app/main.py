@@ -5,6 +5,13 @@ from db import *
 from psycopg.errors import UniqueViolation
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+import os
+
+def session_cookie_secure():
+    value = os.environ.get("SESSION_COOKIE_SECURE", "false").lower()
+    if value not in ("true", "false"):
+        raise ValueError("SESSION_COOKIE_SECURE должен быть true или false")
+    return value == "true"
 
 class RegistrationData(BaseModel):
     username: str = Field(min_length=3,max_length=50)
@@ -112,7 +119,7 @@ def login_totp(data: TotpLoginData, response: Response):
                             key="session",
                             value=session_token,
                             httponly=True,
-                            secure=False,
+                            secure=session_cookie_secure(),
                             samesite="strict",
                             max_age=86400,
                             path="/"
@@ -139,7 +146,8 @@ def profile(request: Request):
 @app.post("/logout")
 def logout(request: Request, response: Response):
     origin = request.headers.get("Origin")
-    if origin != "http://127.0.0.1:8000":
+    allowed_origin = os.environ.get("APP_ORIGIN", "http://127.0.0.1:8000")
+    if origin != allowed_origin:
         raise HTTPException(status_code=403, detail="Недопустимый источник запроса")
 
     token = request.cookies.get("session")
@@ -154,6 +162,7 @@ def logout(request: Request, response: Response):
                 response.delete_cookie(
                     key="session",
                     path="/",
+                    secure=session_cookie_secure(),
                     samesite="strict"
                 )
                 return {"user_id":session[0], "message":"Выход выполнен"}
@@ -182,14 +191,12 @@ def setup2fa(data: TotpSetupData):
                 raise HTTPException(status_code=404, detail="Пользователь не найден")
             elif get_2fa is False:
                 secret = generate_totp_secret()
-                print("Ключ для добавления в приложение: ",secret)
                 encrypted_secret = encrypt_totp_secret(load_aes_key(),secret)
                 save_pending_totp(conn, user_id, encrypted_secret[0], encrypted_secret[1])
                 username=get_username_by_id(conn, user_id)
                 if username is None:
                     raise HTTPException(status_code=404, detail="Пользователь не найден")
                 uri = generate_otpauth_uri(username,secret)
-                print(uri)
                 return {
                     "message": "Ожидается подтверждение 2FA",
                     "otpauth_uri": uri
@@ -224,7 +231,7 @@ def confirm2fa(data: TotpConfirmData, response: Response):
                         key="session",
                         value=session_token,
                         httponly=True,
-                        secure=False,
+                        secure=session_cookie_secure(),
                         samesite="strict",
                         max_age=86400,
                         path="/"

@@ -10,6 +10,7 @@ import os
 from crypto_core import totp
 import time
 import hashlib
+from urllib.parse import quote, urlencode
 load_dotenv()
 
 class InvalidTotpCodeError(ValueError):
@@ -59,7 +60,9 @@ def generate_totp_secret():
 
 def generate_otpauth_uri(username, secret):
     issuer = os.environ["TOTP_ISSUER"]
-    otpauth = f"otpauth://totp/{issuer}:{username}?secret={secret}&issuer={issuer}&algorithm=SHA1&digits=6&period=30"
+    label = f"{quote(issuer, safe='')}:{quote(username, safe='')}"
+    params = urlencode({"secret": secret, "issuer": issuer, "algorithm": "SHA1", "digits": 6, "period": 30})
+    otpauth = f"otpauth://totp/{label}?{params}"
     return otpauth
 
 def generate_aes_key() -> bytes:

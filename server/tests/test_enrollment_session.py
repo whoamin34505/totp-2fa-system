@@ -45,6 +45,20 @@ def test_confirm_creates_session(enrollment):
     assert "httponly" in cookie and "samesite=strict" in cookie
 
 
+@pytest.mark.parametrize("path", ["/2fa/confirm", "/login/totp"])
+@pytest.mark.parametrize("secure", ["true", "false"])
+def test_session_cookie_uses_configured_secure_flag(enrollment, monkeypatch, path, secure):
+    client, main, conn = enrollment
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", secure)
+    monkeypatch.setattr(main, "get_active_totp_secret", lambda *args: b"secret")
+    monkeypatch.setattr(main, "verify_totp", lambda *args: 12345)
+    monkeypatch.setattr(main, "protection_replay_attack", lambda *args: True)
+
+    response = client.post(path, json={"login_token": "login", "code": "123456"})
+    assert response.status_code == 200
+    assert ("; secure" in response.headers["set-cookie"].lower()) == (secure == "true")
+
+
 def test_invalid_code_does_not_create_session(enrollment):
     client, main, conn = enrollment
     main.confirm_totp_enrollment.side_effect = main.InvalidTotpCodeError("invalid")

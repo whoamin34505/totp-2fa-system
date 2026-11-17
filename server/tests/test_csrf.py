@@ -57,3 +57,19 @@ def test_logout_requires_session_for_trusted_origin(logout_client):
 
     assert response.status_code == 401
     revoke.assert_not_called()
+
+
+def test_logout_uses_configured_origin(logout_client, monkeypatch):
+    monkeypatch.setenv("APP_ORIGIN", "https://example.com")
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "true")
+    client, revoke = logout_client
+    client.cookies.set("session", "test-token")
+
+    rejected = client.post("/logout", headers={"Origin": "http://127.0.0.1:8000"})
+    assert rejected.status_code == 403
+    revoke.assert_not_called()
+
+    response = client.post("/logout", headers={"Origin": "https://example.com"})
+    assert response.status_code == 200
+    assert "; secure" in response.headers["set-cookie"].lower()
+    revoke.assert_called_once()
