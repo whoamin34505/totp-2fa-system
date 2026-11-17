@@ -13,23 +13,23 @@ async function requestJson(url, body) {
         throw new Error("Не удалось связаться с сервером. Попробуйте ещё раз.");
     }
 
-    let data;
+    let responseData;
     try {
-        data = await response.json();
+        responseData = await response.json();
     } catch {
-        data = null;
+        responseData = null;
     }
 
-    if (response.ok && data) {
-        return data;
+    if (response.ok && responseData) {
+        return responseData;
     }
 
-    let text = "Не удалось выполнить запрос. Попробуйте ещё раз.";
-    if (data && typeof data.detail === "string") {
-        text = data.detail;
+    let errorMessage = "Не удалось выполнить запрос. Попробуйте ещё раз.";
+    if (responseData && typeof responseData.detail === "string") {
+        errorMessage = responseData.detail;
     }
 
-    const error = new Error(text);
+    const error = new Error(errorMessage);
     error.status = response.status;
     throw error;
 }
