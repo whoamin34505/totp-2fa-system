@@ -26,23 +26,26 @@ struct ContentView: View {
     var body: some View {
         VStack {
             TimelineView(.animation) { context in
-
                 let seconds = Int(context.date.timeIntervalSince1970)
                 let passed = seconds % 30
                 let left = 30 - passed
-                
+
                 let passedExact = context.date.timeIntervalSince1970
                     .truncatingRemainder(dividingBy: 30.0)
-
                 let remainingExact = 30.0 - passedExact
-
                 let progress = remainingExact / 30.0
 
                 let color = progressColor(left: left)
 
-                ProgressView(value: progress)
-                   
-                    .tint(color)
+                Rectangle()
+                    .fill(color.opacity(0.2))
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(color)
+                            .scaleEffect(x: progress, anchor: .leading)
+                    }
+                    .frame(height: 4)
+                    .animation(.easeInOut(duration: 0.25), value: color)
                     .sensoryFeedback(.impact(weight: .light), trigger: left) { old, new in
                         old != new && (1...5).contains(new)
                     }
