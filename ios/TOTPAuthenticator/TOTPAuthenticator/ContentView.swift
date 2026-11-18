@@ -118,6 +118,19 @@ struct ContentView: View {
                     .transition(.opacity)
             }
             Spacer()
+            Button ("Проверить KeyChain") {
+                let store = KeychainStore()
+                store.saveSecret("abcdef", accountID: "kolgol")
+            }
+            Button ("Найти в Keychain") {
+                let store = KeychainStore()
+                if let secret = store.readSecret(accountID: "kolgo") {
+                    print("Секрет найден, длина: \(secret.count)")
+                } else {
+                    print("Секрет не найден")
+                }
+            }
+            
         }
     }
     private func progressColor(left: Int) -> Color {

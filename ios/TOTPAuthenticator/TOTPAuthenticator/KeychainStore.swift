@@ -9,5 +9,43 @@ import Foundation
 import Security
 
 struct KeychainStore {
-
+    func saveSecret(_ secret: String, accountID: String) {
+        let secretData = Data(secret.utf8)
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: accountID,
+            kSecValueData as String: secretData,
+            kSecAttrService as String:"TOTPAuthenticator",
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+        
+        let status = SecItemAdd(query as CFDictionary, nil)
+        if status == errSecSuccess {
+            print("Секрет сохранён")
+        } else {
+            print("Ошибка сохранения: \(status)")
+        }
+    }
+    
+    func readSecret(accountID: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: accountID,
+            kSecReturnData as String: true,
+            kSecAttrService as String:"TOTPAuthenticator",
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        if status == errSecSuccess {
+            if let secretData = result as? Data {
+                let secret = String(data: secretData, encoding: .utf8)
+                return secret
+            }
+        }
+        print("Секрет не получен: \(status)")
+        return nil
+    }
+    
 }
