@@ -138,6 +138,15 @@ struct ContentView: View {
                 let store = KeychainStore()
                 store.updateSecret("aaa", accountID: "kolgol")
             }
+            Button("Проверить Base32") {
+                let decoder = Base32Decoder()
+
+                if let data = decoder.decode("JA") {
+                    print(String(data: data, encoding: .utf8) ?? "Ошибка")
+                } else {
+                    print("Ошибка декодирования")
+                }
+            }
         }
     }
     private func progressColor(left: Int) -> Color {
