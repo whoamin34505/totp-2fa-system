@@ -168,6 +168,14 @@ struct ContentView: View {
 
                 print(code)
             }
+            Button("Проверить TOTP") {
+                let decoder = Base32Decoder()
+
+                if let key = decoder.decode("JBSWY3DPEHPK3PXP") {
+                    let code = TOTP().generate(key: key)
+                    print("TOTP: \(code)")
+                }
+            }
         }
     }
     private func progressColor(left: Int) -> Color {
