@@ -161,6 +161,13 @@ struct ContentView: View {
 
                 print(hex)
             }
+            Button("Проверить HOTP") {
+                let key = Data("12345678901234567890".utf8)
+
+                let code = HOTP().generate(key: key, counter: 0)
+
+                print(code)
+            }
         }
     }
     private func progressColor(left: Int) -> Color {
