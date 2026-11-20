@@ -9,26 +9,72 @@ import SwiftUI
 import UIKit
 
 struct Account: Identifiable {
-    let id = UUID()
+    let id : String
     let login: String
     let service: String
-    let code: String
 }
 
 struct ContentView: View {
     @State private var isEditing = false
     @State private var isCopied = false
+    @State private var isAdding = false
+    @State private var service = ""
+    @State private var login = ""
+    @State private var secret = ""
     @State private var hideTask: Task<Void, Never>?
-    let accounts = [
-        Account(login:"kolyan",service: "GitHub",code: "020 202"),
-        Account(login: "nikolay@gmail.com", service: "Google", code: "123 456"),
-        Account(login: "admin", service: "Microsoft", code: "987 654")]
+    @State private var totpCodes: [String: String] = [:]
+    @State private var accounts = [
+        Account(id: "github-demo",login:"kolyan",service: "GitHub"),
+        Account(id: "gmail",login: "nikolay@gmail.com", service: "Google"),
+        Account(id: "microsoft",login: "admin", service: "Microsoft")]
+    
+    private func updateCodes() {
+        for account in accounts {
+            let store = KeychainStore()
+            if let secret = store.readSecret(accountID: account.id) {
+                if let decoded_secret = Base32Decoder().decode(secret) {
+                    let code = TOTP().generate(key: decoded_secret)
+                    totpCodes[account.id] = code
+                } else {
+                    print("Ошибка декодирования")
+                }
+                
+            } else {
+                print("Секрет не найден")
+            }
+        }
+    }
+    
+    private func addAccount() {
+        if service.isEmpty || login.isEmpty || secret.isEmpty {
+            return
+        }
+        guard let decodedSecret = Base32Decoder().decode(secret) else {
+            print("Некорректный Base32-секрет")
+            return
+        }
+        let id = UUID().uuidString
+        let store = KeychainStore()
+        guard store.saveSecret(secret, accountID: id) else {
+            print("Не удалось сохранить секрет")
+            return
+        }
+        accounts.append(Account(id: id, login: login, service: service))
+        totpCodes[id] = TOTP().generate(key: decodedSecret)
+        isAdding = false
+        service = ""
+        login = ""
+        secret = ""
+    }
+    
     var body: some View {
         VStack {
             TimelineView(.animation) { context in
                 let seconds = Int(context.date.timeIntervalSince1970)
                 let passed = seconds % 30
                 let left = 30 - passed
+                
+                let period = seconds / 30
 
                 let passedExact = context.date.timeIntervalSince1970
                     .truncatingRemainder(dividingBy: 30.0)
@@ -48,6 +94,9 @@ struct ContentView: View {
                     .animation(.easeInOut(duration: 0.25), value: color)
                     .sensoryFeedback(.impact(weight: .light), trigger: left) { old, new in
                         old != new && (1...5).contains(new)
+                    }
+                    .onChange(of: period, initial: true) { old, new in
+                        updateCodes()
                     }
             }
             HStack {
@@ -74,22 +123,24 @@ struct ContentView: View {
             .padding()
             ForEach (accounts) { account in
                 Button {
-                    UIPasteboard.general.string = account.code.replacingOccurrences(of: " ", with: "")
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.success)
-                    hideTask?.cancel()
-                    withAnimation(.easeInOut(duration: 0.1)) {
-                        isCopied = true
-                    }
-                    print("Код скопирован в буфер обмена")
-                    hideTask = Task {
-                        do {
-                            try await Task.sleep(for: .seconds(2))
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isCopied = false
+                    if let code = totpCodes[account.id] {
+                        UIPasteboard.general.string = code
+                        let generator = UINotificationFeedbackGenerator()
+                        generator.notificationOccurred(.success)
+                        hideTask?.cancel()
+                        withAnimation(.easeInOut(duration: 0.1)) {
+                            isCopied = true
+                        }
+                        print("Код скопирован в буфер обмена")
+                        hideTask = Task {
+                            do {
+                                try await Task.sleep(for: .seconds(2))
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isCopied = false
+                                }
+                            } catch {
+                                return
                             }
-                        } catch {
-                            return
                         }
                     }
                 } label: {
@@ -103,7 +154,7 @@ struct ContentView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text(account.code)
+                        Text(totpCodes[account.id] ?? "— — — — — —")
                             .font(.title2)
                     }
                     .contentShape(Rectangle())
@@ -118,63 +169,33 @@ struct ContentView: View {
                     .transition(.opacity)
             }
             Spacer()
-            Button ("Проверить KeyChain") {
+            Button("Сохранить тестовый GitHub") {
                 let store = KeychainStore()
-                store.saveSecret("abcdef", accountID: "kolgol")
+                store.saveSecret("JBSWY3DPEHPK3PXP", accountID: "github-demo")
             }
-            Button ("Найти в Keychain") {
-                let store = KeychainStore()
-                if let secret = store.readSecret(accountID: "kolgol") {
-                    print("Секрет найден, длина: \(secret.count)")
-                } else {
-                    print("Секрет не найден")
-                }
+            Button("+") {
+                isAdding = true
             }
-            Button ("Удалить из Keychain") {
-                let store = KeychainStore()
-                store.deleteSecret(accountID: "kolgol")
-            }
-            Button("Обновить") {
-                let store = KeychainStore()
-                store.updateSecret("aaa", accountID: "kolgol")
-            }
-            Button("Проверить Base32") {
-                let decoder = Base32Decoder()
-
-                if let data = decoder.decode("JA") {
-                    print(String(data: data, encoding: .utf8) ?? "Ошибка")
-                } else {
-                    print("Ошибка декодирования")
-                }
-            }
-            Button("Проверить HMAC") {
-                let hmac = HMACSHA1()
-
-                let key = Data(repeating: 0x0b, count: 20)
-                let message = Data("Hi There".utf8)
-
-                let result = hmac.calculate(key: key, message: message)
-
-                let hex = result.map {
-                    String(format: "%02x", $0)
-                }.joined()
-
-                print(hex)
-            }
-            Button("Проверить HOTP") {
-                let key = Data("12345678901234567890".utf8)
-
-                let code = HOTP().generate(key: key, counter: 0)
-
-                print(code)
-            }
-            Button("Проверить TOTP") {
-                let decoder = Base32Decoder()
-
-                if let key = decoder.decode("JBSWY3DPEHPK3PXP") {
-                    let code = TOTP().generate(key: key)
-                    print("TOTP: \(code)")
-                }
+            .sheet(isPresented: $isAdding) {
+                VStack{
+                    Text("Добавление аккаунта").font(.title2)
+                    TextField("Название сервиса", text: $service).textFieldStyle(.roundedBorder)
+                    TextField("Название аккаунта", text: $login).textFieldStyle(.roundedBorder)
+                    TextField("Секрет", text: $secret).textFieldStyle(.roundedBorder)
+                    Button {
+                        addAccount()
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Добавить")
+                        }
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                    }
+                }.padding()
+                
             }
         }
     }

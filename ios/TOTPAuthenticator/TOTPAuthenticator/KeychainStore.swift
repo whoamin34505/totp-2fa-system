@@ -9,7 +9,7 @@ import Foundation
 import Security
 
 struct KeychainStore {
-    func saveSecret(_ secret: String, accountID: String) {
+    func saveSecret(_ secret: String, accountID: String) -> Bool {
         let secretData = Data(secret.utf8)
         
         let query: [String: Any] = [
@@ -23,8 +23,10 @@ struct KeychainStore {
         let status = SecItemAdd(query as CFDictionary, nil)
         if status == errSecSuccess {
             print("Секрет сохранён")
+            return true
         } else {
             print("Ошибка сохранения: \(status)")
+            return false
         }
     }
     
