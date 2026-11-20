@@ -147,6 +147,20 @@ struct ContentView: View {
                     print("Ошибка декодирования")
                 }
             }
+            Button("Проверить HMAC") {
+                let hmac = HMACSHA1()
+
+                let key = Data(repeating: 0x0b, count: 20)
+                let message = Data("Hi There".utf8)
+
+                let result = hmac.calculate(key: key, message: message)
+
+                let hex = result.map {
+                    String(format: "%02x", $0)
+                }.joined()
+
+                print(hex)
+            }
         }
     }
     private func progressColor(left: Int) -> Color {
