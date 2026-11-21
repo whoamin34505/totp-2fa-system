@@ -15,9 +15,9 @@ struct Account: Identifiable {
 }
 
 struct ContentView: View {
+    @State private var selectedTab = 0
     @State private var isEditing = false
     @State private var isCopied = false
-    @State private var isAdding = false
     @State private var service = ""
     @State private var login = ""
     @State private var secret = ""
@@ -61,13 +61,35 @@ struct ContentView: View {
         }
         accounts.append(Account(id: id, login: login, service: service))
         totpCodes[id] = TOTP().generate(key: decodedSecret)
-        isAdding = false
         service = ""
         login = ""
         secret = ""
+        selectedTab = 0
     }
     
     var body: some View {
+        TabView(selection: $selectedTab) {
+            Tab("Главная", systemImage: "house.fill", value: 0) {
+                homeView
+            }
+
+            Tab("Добавить", systemImage: "plus.circle.fill", value: 1) {
+                addAccountView
+            }
+
+            Tab("Настройки", systemImage: "gearshape.fill", value: 2) {
+                NavigationStack {
+                    ContentUnavailableView(
+                        "Настройки пока недоступны",
+                        systemImage: "gearshape"
+                    )
+                    .navigationTitle("Настройки")
+                }
+            }
+        }
+    }
+
+    private var homeView: some View {
         VStack {
             TimelineView(.animation) { context in
                 let seconds = Int(context.date.timeIntervalSince1970)
@@ -173,32 +195,31 @@ struct ContentView: View {
                 let store = KeychainStore()
                 store.saveSecret("JBSWY3DPEHPK3PXP", accountID: "github-demo")
             }
-            Button("+") {
-                isAdding = true
-            }
-            .sheet(isPresented: $isAdding) {
-                VStack{
-                    Text("Добавление аккаунта").font(.title2)
-                    TextField("Название сервиса", text: $service).textFieldStyle(.roundedBorder)
-                    TextField("Название аккаунта", text: $login).textFieldStyle(.roundedBorder)
-                    TextField("Секрет", text: $secret).textFieldStyle(.roundedBorder)
-                    Button {
-                        addAccount()
-                    } label: {
-                        HStack {
-                            Image(systemName: "plus.circle.fill")
-                            Text("Добавить")
-                        }
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                    }
-                }.padding()
-                
-            }
         }
     }
+
+    private var addAccountView: some View {
+        VStack {
+            Text("Добавление аккаунта").font(.title2)
+            TextField("Название сервиса", text: $service).textFieldStyle(.roundedBorder)
+            TextField("Название аккаунта", text: $login).textFieldStyle(.roundedBorder)
+            TextField("Секрет", text: $secret).textFieldStyle(.roundedBorder)
+            Button {
+                addAccount()
+            } label: {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Добавить")
+                }
+                .padding()
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+        }
+        .padding()
+    }
+
     private func progressColor(left: Int) -> Color {
         if left <= 5 {
             return .red
