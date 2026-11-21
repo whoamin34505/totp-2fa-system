@@ -31,6 +31,17 @@ struct ContentView: View {
     @AppStorage("appTheme") private var appTheme = "system"
     @AppStorage("faceIDEnabled") private var faceIDEnabled = false
     @State private var isUnlocked = false
+    @State private var isAuthenticating = false
+    @State private var shouldAutoAuthenticate = true
+    @Environment(\.scenePhase) private var scenePhase
+
+    private var isLocked: Bool {
+        faceIDEnabled && !isUnlocked
+    }
+
+    private var showBlur: Bool {
+        isLocked || (scenePhase != .active && !isAuthenticating)
+    }
 
     private func checkCameraPermission() async {
         if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
@@ -120,6 +131,10 @@ struct ContentView: View {
     }
     
     private func authenticate() async -> Bool {
+        guard !isAuthenticating else { return false }
+        isAuthenticating = true
+        defer { isAuthenticating = false }
+
         let context = LAContext()
 
         do {
@@ -132,67 +147,100 @@ struct ContentView: View {
             return false
         }
     }
-    
+
+    private func unlockIfNeeded() async {
+        guard isLocked, shouldAutoAuthenticate, !isAuthenticating else { return }
+        shouldAutoAuthenticate = false
+
+        if await authenticate() {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isUnlocked = true
+            }
+        }
+    }
+
     var body: some View {
-        Group {
-            if faceIDEnabled && !isUnlocked {
-                lockView
-            } else {
-                TabView(selection: $selectedTab) {
-                    Tab("Главная", systemImage: "house.fill", value: 0) {
-                        NavigationStack {
-                            homeView
+        TabView(selection: $selectedTab) {
+            Tab("Главная", systemImage: "house.fill", value: 0) {
+                NavigationStack {
+                    homeView
+                }
+            }
+
+            Tab("Добавить", systemImage: "plus.circle.fill", value: 1) {
+                scannerView
+            }
+
+            Tab("Настройки", systemImage: "gearshape.fill", value: 2) {
+                NavigationStack {
+                    Form {
+                        Section("Настройки оформления") {
+                            Picker("Тема оформления", selection: $appTheme) {
+                                Text("Системная").tag("system")
+                                Text("Светлая").tag("light")
+                                Text("Тёмная").tag("dark")
+                            }
                         }
-                    }
-
-                    Tab("Добавить", systemImage: "plus.circle.fill", value: 1) {
-                        scannerView
-                    }
-
-                    Tab("Настройки", systemImage: "gearshape.fill", value: 2) {
-                        NavigationStack {
-                            Form {
-                                Section("Настройки оформления") {
-                                    Picker("Тема оформления", selection: $appTheme) {
-                                        Text("Системная").tag("system")
-                                        Text("Светлая").tag("light")
-                                        Text("Тёмная").tag("dark")
+                        Section("Безопасность") {
+                            Toggle("Защита Face ID", isOn: Binding(
+                                get: {
+                                    faceIDEnabled
+                                },
+                                set: { newValue in
+                                    Task {
+                                        if await authenticate() {
+                                            faceIDEnabled = newValue
+                                            isUnlocked = true
+                                        }
                                     }
                                 }
-                                Section("Безопасность") {
-                                    Toggle("Защита Face ID", isOn: Binding(
-                                        get: {
-                                            faceIDEnabled
-                                        },
-                                        set: { newValue in
-                                            Task {
-                                                if await authenticate() {
-                                                    faceIDEnabled = newValue
-                                                    isUnlocked = true
-                                                }
-                                            }
-                                        }
-                                    ))
-                                }
-                            }
-                            .navigationTitle("Настройки")
+                            ))
                         }
                     }
-                }.onAppear {
-                    loadAccounts()
-                    updateCodes()
+                    .navigationTitle("Настройки")
                 }
-                .sheet(isPresented: $showManualAdd) {
-                    addAccountView
-                }
-                .preferredColorScheme(
-                    appTheme == "dark" ? .dark :
-                    appTheme == "light" ? .light : nil
-                )
-                .task(id: selectedTab) {
-                    if selectedTab == 1 {
-                        await checkCameraPermission()
-                    }
+            }
+        }
+        .onAppear {
+            loadAccounts()
+            updateCodes()
+        }
+        .sheet(isPresented: $showManualAdd) {
+            addAccountView
+        }
+        .task(id: selectedTab) {
+            if selectedTab == 1 {
+                await checkCameraPermission()
+            }
+        }
+        .blur(radius: showBlur ? 24 : 0)
+        .allowsHitTesting(!showBlur)
+        .overlay {
+            if showBlur {
+                privacyView
+                    .transition(.opacity)
+            }
+        }
+        .overlay {
+            if isLocked {
+                lockView
+            }
+        }
+        .animation(.easeInOut(duration: 0.22), value: showBlur)
+        .preferredColorScheme(
+            appTheme == "dark" ? .dark :
+            appTheme == "light" ? .light : nil
+        )
+        .task {
+            await unlockIfNeeded()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background && faceIDEnabled {
+                isUnlocked = false
+                shouldAutoAuthenticate = true
+            } else if newPhase == .active {
+                Task {
+                    await unlockIfNeeded()
                 }
             }
         }
@@ -322,25 +370,37 @@ struct ContentView: View {
     }
     
     private var lockView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "lock.shield")
-                .font(.system(size: 60))
+        VStack(spacing: 24) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(.secondary)
 
-            Text("Приложение заблокировано")
-                .font(.title2)
-
-            Button("Разблокировать") {
+            Button {
                 Task {
                     if await authenticate() {
-                        isUnlocked = true
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isUnlocked = true
+                        }
                     }
                 }
+            } label: {
+                Label("Разблокировать", systemImage: "faceid")
+                    .font(.headline)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
             }
             .buttonStyle(.glass)
+            .disabled(isAuthenticating)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .transition(.opacity)
     }
-    
+
+    private var privacyView: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .ignoresSafeArea()
+    }
+
     private var scannerView: some View {
         VStack(spacing: 20) {
             Text("Сканирование QR-кода")
@@ -351,7 +411,7 @@ struct ContentView: View {
                 && DataScannerViewController.isAvailable {
 
                 ZStack {
-                    QRScannerView(isActive: selectedTab == 1 && !showManualAdd) { payload in
+                    QRScannerView(isActive: selectedTab == 1 && !showManualAdd && !showBlur) { payload in
 
                         guard let result = OTPAuthParser().parse(payload) else {
                             print("Некорректный или неподдерживаемый TOTP QR-код")
