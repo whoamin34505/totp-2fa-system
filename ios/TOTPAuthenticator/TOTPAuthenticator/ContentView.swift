@@ -19,13 +19,18 @@ struct Account: Codable, Identifiable {
 
 struct ContentView: View {
     @State private var selectedTab = 0
-    @State private var cameraAuthorized = false
+    @State private var cameraAuthorization: AVAuthorizationStatus?
+    @State private var scannerFailed = false
     @State private var showManualAdd = false
     @State private var isCopied = false
     @State private var service = ""
     @State private var login = ""
     @State private var secret = ""
     @State private var hideTask: Task<Void, Never>?
+    @State private var userAlert: UserAlert?
+    @State private var addAccountAlert: UserAlert?
+    @State private var accountsToDelete: [Account] = []
+    @State private var showDeleteConfirmation = false
     @State private var totpCodes: [String: String] = [:]
     @State private var accounts: [Account] = []
     @AppStorage("appTheme") private var appTheme = "system"
@@ -34,6 +39,18 @@ struct ContentView: View {
     @State private var isAuthenticating = false
     @State private var shouldAutoAuthenticate = true
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private struct UserAlert: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+
+        var presentation: Alert {
+            Alert(title: Text(title), message: Text(message), dismissButton: .default(Text("Понятно")))
+        }
+    }
 
     private var isLocked: Bool {
         faceIDEnabled && !isUnlocked
@@ -44,49 +61,57 @@ struct ContentView: View {
     }
 
     private func checkCameraPermission() async {
+        guard DataScannerViewController.isSupported else { return }
         if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
-            cameraAuthorized = await AVCaptureDevice.requestAccess(for: .video)
-        } else {
-            cameraAuthorized = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
+            _ = await AVCaptureDevice.requestAccess(for: .video)
         }
+        guard !Task.isCancelled else { return }
+        cameraAuthorization = AVCaptureDevice.authorizationStatus(for: .video)
     }
     
     private func updateCodes() {
+        let store = KeychainStore()
+        var codes: [String: String] = [:]
         for account in accounts {
-            let store = KeychainStore()
-            if let secret = store.readSecret(accountID: account.id) {
-                if let decoded_secret = Base32Decoder().decode(secret) {
-                    let code = TOTP().generate(key: decoded_secret)
-                    totpCodes[account.id] = code
-                } else {
-                    print("Ошибка декодирования")
-                }
-                
-            } else {
-                print("Секрет не найден")
+            if let secret = store.readSecret(accountID: account.id),
+               let key = Base32Decoder().decode(secret) {
+                codes[account.id] = TOTP().generate(key: key)
             }
         }
+        totpCodes = codes
     }
     
     private func addAccount() {
-        if service.isEmpty || login.isEmpty || secret.isEmpty {
+        let serviceName = service.trimmingCharacters(in: .whitespacesAndNewlines)
+        let accountLogin = login.trimmingCharacters(in: .whitespacesAndNewlines)
+        let accountSecret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !serviceName.isEmpty, !accountLogin.isEmpty, !accountSecret.isEmpty else {
+            addAccountAlert = UserAlert(
+                title: "Заполните все поля",
+                message: "Укажите название сервиса, название аккаунта и секрет."
+            )
             return
         }
-        guard let decodedSecret = Base32Decoder().decode(secret) else {
-            print("Некорректный Base32-секрет")
+        guard let key = Base32Decoder().decode(accountSecret) else {
+            addAccountAlert = UserAlert(
+                title: "Неверный секрет",
+                message: "Проверьте ключ настройки, который выдал сервис. Ожидается ключ в формате Base32."
+            )
             return
         }
         let id = UUID().uuidString
         let store = KeychainStore()
-        guard store.saveSecret(secret, accountID: id) else {
-            print("Не удалось сохранить секрет")
+        guard store.saveSecret(accountSecret, accountID: id) else {
+            addAccountAlert = UserAlert(
+                title: "Не удалось добавить аккаунт",
+                message: "Не удалось сохранить секрет в Связке ключей. Попробуйте ещё раз."
+            )
             return
         }
-        accounts.append(Account(id: id, login: login, service: service))
+        accounts.append(Account(id: id, login: accountLogin, service: serviceName))
         saveAccounts()
-        totpCodes[id] = TOTP().generate(key: decodedSecret)
-        service = ""
-        login = ""
+        totpCodes[id] = TOTP().generate(key: key)
         secret = ""
         selectedTab = 0
         showManualAdd = false
@@ -106,23 +131,34 @@ struct ContentView: View {
         do {
             accounts = try JSONDecoder().decode([Account].self, from: data)
         } catch {
-            print("Не удалось декодировать аккаунты: \(error)")
             accounts = []
+            userAlert = UserAlert(
+                title: "Не удалось загрузить аккаунты",
+                message: "Перезапустите приложение и попробуйте снова."
+            )
         }
     }
 
-    private func deleteAccounts(at offsets: IndexSet) {
-        let ids = offsets.map { accounts[$0].id }
-        for id in ids {
-            let store = KeychainStore()
-            if store.deleteSecret(accountID: id) {
-                accounts.removeAll { account in
-                    account.id == id
-                }
-                totpCodes.removeValue(forKey: id)
+    private func deleteAccounts(_ selection: [Account]) {
+        let store = KeychainStore()
+        var deleteFailed = false
+
+        for account in selection {
+            if store.deleteSecret(accountID: account.id) {
+                accounts.removeAll { $0.id == account.id }
+                totpCodes.removeValue(forKey: account.id)
+            } else {
+                deleteFailed = true
             }
         }
         saveAccounts()
+
+        if deleteFailed {
+            userAlert = UserAlert(
+                title: "Не удалось завершить удаление",
+                message: "Попробуйте ещё раз удалить аккаунты, оставшиеся в списке."
+            )
+        }
     }
     
     private func moveAccounts(from source: IndexSet, to destination: Int) {
@@ -142,18 +178,41 @@ struct ContentView: View {
                 .deviceOwnerAuthentication,
                 localizedReason: "Разблокируйте доступ к кодам"
             )
+        } catch let error as LAError {
+            switch error.code {
+            case .appCancel, .systemCancel:
+                shouldAutoAuthenticate = true
+            case .userCancel:
+                break
+            case .passcodeNotSet:
+                userAlert = UserAlert(
+                    title: "Требуется код-пароль",
+                    message: "Установите код-пароль устройства в настройках iPhone и попробуйте снова."
+                )
+            default:
+                showAuthenticationFailure()
+            }
+            return false
         } catch {
-            print("Ошибка Face ID: \(error)")
+            showAuthenticationFailure()
             return false
         }
     }
 
+    private func showAuthenticationFailure() {
+        userAlert = UserAlert(
+            title: "Не удалось подтвердить личность",
+            message: "Попробуйте ещё раз с Face ID или кодом-паролем устройства."
+        )
+    }
+
     private func unlockIfNeeded() async {
-        guard isLocked, shouldAutoAuthenticate, !isAuthenticating else { return }
+        guard scenePhase == .active, isLocked, shouldAutoAuthenticate, !isAuthenticating,
+              userAlert == nil else { return }
         shouldAutoAuthenticate = false
 
         if await authenticate() {
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(.easeOut(duration: 0.45)) {
                 isUnlocked = true
             }
         }
@@ -195,9 +254,20 @@ struct ContentView: View {
                                     }
                                 }
                             ))
+                            .disabled(isAuthenticating)
                         }
                     }
-                    .navigationTitle("Настройки")
+                    .toolbar(.hidden, for: .navigationBar)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        HStack {
+                            Text("Настройки")
+                                .font(.largeTitle.bold())
+                            Spacer()
+                        }
+                        .padding(.leading, 28)
+                        .padding(.vertical, 8)
+                        .background(Color(uiColor: .systemGroupedBackground))
+                    }
                 }
             }
         }
@@ -205,41 +275,49 @@ struct ContentView: View {
             loadAccounts()
             updateCodes()
         }
-        .sheet(isPresented: $showManualAdd) {
+        .alert(item: $userAlert) { $0.presentation }
+        .sheet(isPresented: $showManualAdd, onDismiss: {
+            service = ""
+            login = ""
+            secret = ""
+            addAccountAlert = nil
+        }) {
             addAccountView
         }
         .task(id: selectedTab) {
             if selectedTab == 1 {
+                scannerFailed = false
                 await checkCameraPermission()
             }
         }
-        .blur(radius: showBlur ? 24 : 0)
         .allowsHitTesting(!showBlur)
+        .accessibilityHidden(showBlur)
         .overlay {
-            if showBlur {
-                privacyView
-                    .transition(.opacity)
-            }
+            SmoothBlurView(isBlurred: showBlur)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
         }
         .overlay {
             if isLocked {
                 lockView
             }
         }
-        .animation(.easeInOut(duration: 0.22), value: showBlur)
+        .animation(.easeOut(duration: 0.35), value: isLocked)
         .preferredColorScheme(
             appTheme == "dark" ? .dark :
             appTheme == "light" ? .light : nil
         )
-        .task {
-            await unlockIfNeeded()
-        }
-        .onChange(of: scenePhase) { _, newPhase in
+        .onChange(of: scenePhase, initial: true) { _, newPhase in
             if newPhase == .background && faceIDEnabled {
                 isUnlocked = false
                 shouldAutoAuthenticate = true
             } else if newPhase == .active {
+                updateCodes()
+                if selectedTab == 1 {
+                    cameraAuthorization = AVCaptureDevice.authorizationStatus(for: .video)
+                }
                 Task {
+                    try? await Task.sleep(for: .milliseconds(250))
                     await unlockIfNeeded()
                 }
             }
@@ -274,66 +352,119 @@ struct ContentView: View {
                     .sensoryFeedback(.impact(weight: .light), trigger: left) { old, new in
                         old != new && (1...5).contains(new)
                     }
-                    .onChange(of: period, initial: true) { old, new in
+                    .onChange(of: period, initial: true) {
                         updateCodes()
                     }
             }
             HStack {
                 Text("Аккаунты")
-                    .font(.title2)
+                    .font(.title)
                 Spacer()
                 EditButton().buttonStyle(.glass)
             }
             .padding()
             List {
-                ForEach (accounts) { account in
+                ForEach(accounts) { account in
                     Button {
-                        if let code = totpCodes[account.id] {
-                            UIPasteboard.general.string = code
-                            let generator = UINotificationFeedbackGenerator()
-                            generator.notificationOccurred(.success)
-                            hideTask?.cancel()
-                            withAnimation(.easeInOut(duration: 0.1)) {
-                                isCopied = true
-                            }
-                            print("Код скопирован в буфер обмена")
-                            hideTask = Task {
-                                do {
-                                    try await Task.sleep(for: .seconds(2))
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        isCopied = false
-                                    }
-                                } catch {
-                                    return
-                                }
-                            }
-                        }
+                        copyCode(for: account)
                     } label: {
                         HStack {
-                            VStack (alignment: .leading)
-                            {
+                            VStack(alignment: .leading) {
                                 Text(account.login)
+                                    .font(.title3)
                                     .fontWeight(.semibold)
                                 Text(account.service)
-                                    .font(.caption)
+                                    .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Text(totpCodes[account.id] ?? "— — — — — —")
-                                .font(.title2)
+                            let code = totpCodes[account.id]
+                            let formattedCode = code.map { "\($0.prefix(3)) \($0.suffix(3))" } ?? "··· ···"
+                            Text(formattedCode)
+                                .font(.title)
+                                .monospacedDigit()
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                                .accessibilityLabel(code == nil ? "Код недоступен" : formattedCode)
+                                .speechSpellsOutCharacters(code != nil)
                         }
                         .contentShape(Rectangle())
                     }
                     .foregroundStyle(.primary)
-                }.onDelete(perform: deleteAccounts)
-                    .onMove(perform: moveAccounts)
-            }.listStyle(.plain)
-            if isCopied {
-                Text("Скопировано")
-                    .foregroundStyle(.green)
-                    .transition(.opacity)
+                    .buttonStyle(CodeButtonStyle())
+                }
+                .onDelete { offsets in
+                    accountsToDelete = offsets.map { accounts[$0] }
+                    showDeleteConfirmation = true
+                }
+                .onMove(perform: moveAccounts)
             }
-            Spacer()
+            .listStyle(.plain)
+        }
+        .alert(accountsToDelete.count == 1 ? "Удалить аккаунт?" : "Удалить аккаунты?",
+               isPresented: $showDeleteConfirmation) {
+            Button("Удалить", role: .destructive) {
+                deleteAccounts(accountsToDelete)
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            if let account = accountsToDelete.first, accountsToDelete.count == 1 {
+                Text("Коды для «\(account.login)» (\(account.service)) больше не будут доступны в приложении.")
+            } else {
+                Text("Коды для выбранных аккаунтов больше не будут доступны в приложении.")
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if isCopied {
+                Label {
+                    Text("Код скопирован")
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: Capsule())
+                .overlay { Capsule().strokeBorder(.quaternary) }
+                .padding(.bottom, 12)
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private struct CodeButtonStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .opacity(configuration.isPressed ? 0.45 : 1)
+                .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+        }
+    }
+
+    private func copyCode(for account: Account) {
+        guard let code = totpCodes[account.id] else {
+            userAlert = UserAlert(
+                title: "Код недоступен",
+                message: "Не удалось получить секрет аккаунта из Связки ключей. Попробуйте открыть приложение снова."
+            )
+            return
+        }
+
+        UIPasteboard.general.string = code
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        AccessibilityNotification.Announcement("Код скопирован").post()
+
+        hideTask?.cancel()
+        withAnimation(.easeOut(duration: 0.2)) {
+            isCopied = true
+        }
+        hideTask = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                isCopied = false
+            }
         }
     }
 
@@ -342,7 +473,12 @@ struct ContentView: View {
             Text("Добавление аккаунта").font(.title2)
             TextField("Название сервиса", text: $service).textFieldStyle(.roundedBorder)
             TextField("Название аккаунта", text: $login).textFieldStyle(.roundedBorder)
-            TextField("Секрет", text: $secret).textFieldStyle(.roundedBorder)
+            SecureField("Секрет", text: $secret)
+                // iOS не предлагает сохранять секрет как пароль.
+                .textContentType(.oneTimeCode)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .textFieldStyle(.roundedBorder)
             Button {
                 addAccount()
             } label: {
@@ -357,6 +493,7 @@ struct ContentView: View {
             }
         }
         .padding()
+        .alert(item: $addAccountAlert) { $0.presentation }
     }
 
     private func progressColor(left: Int) -> Color {
@@ -378,7 +515,7 @@ struct ContentView: View {
             Button {
                 Task {
                     if await authenticate() {
-                        withAnimation(.easeInOut(duration: 0.25)) {
+                        withAnimation(.easeOut(duration: 0.45)) {
                             isUnlocked = true
                         }
                     }
@@ -392,13 +529,34 @@ struct ContentView: View {
             .buttonStyle(.glass)
             .disabled(isAuthenticating)
         }
-        .transition(.opacity)
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
-    private var privacyView: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .ignoresSafeArea()
+    private struct SmoothBlurView: UIViewRepresentable {
+        let isBlurred: Bool
+        let style: UIBlurEffect.Style = .systemMaterial
+
+        func makeUIView(context: Context) -> UIVisualEffectView {
+            let view = UIVisualEffectView(effect: isBlurred ? UIBlurEffect(style: style) : nil)
+            view.isUserInteractionEnabled = false
+            return view
+        }
+
+        func updateUIView(_ uiView: UIVisualEffectView, context: Context) {
+            let isCurrentlyBlurred = uiView.effect != nil
+            guard isCurrentlyBlurred != isBlurred else { return }
+
+            let targetEffect: UIVisualEffect? = isBlurred ? UIBlurEffect(style: style) : nil
+            let duration: TimeInterval = isBlurred ? 0.15 : 0.5
+
+            UIView.animate(
+                withDuration: duration,
+                delay: 0,
+                options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction]
+            ) {
+                uiView.effect = targetEffect
+            }
+        }
     }
 
     private var scannerView: some View {
@@ -406,24 +564,35 @@ struct ContentView: View {
             Text("Сканирование QR-кода")
                 .font(.title2.bold())
 
-            if cameraAuthorized
-                && DataScannerViewController.isSupported
-                && DataScannerViewController.isAvailable {
-
-                ZStack {
-                    QRScannerView(isActive: selectedTab == 1 && !showManualAdd && !showBlur) { payload in
-
-                        guard let result = OTPAuthParser().parse(payload) else {
-                            print("Некорректный или неподдерживаемый TOTP QR-код")
-                            return
-                        }
-
-                        service = result.service
-                        login = result.login
-                        secret = result.secret
-
-                        showManualAdd = true
+            if !DataScannerViewController.isSupported {
+                cameraMessage("Сканирование QR-кодов недоступно на этом устройстве. Добавьте аккаунт вручную.")
+            } else if cameraAuthorization == .denied {
+                cameraMessage("Разрешите доступ к камере в настройках, чтобы сканировать QR-коды.")
+                Button("Открыть настройки") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        openURL(url)
                     }
+                }
+                .buttonStyle(.bordered)
+            } else if cameraAuthorization == .restricted {
+                cameraMessage("Доступ к камере ограничен. Добавьте аккаунт вручную.")
+            } else if cameraAuthorization != .authorized {
+                ProgressView("Ожидание доступа к камере")
+            } else if scannerFailed || !DataScannerViewController.isAvailable {
+                cameraMessage("Камера сейчас недоступна. Добавьте аккаунт вручную или попробуйте позже.")
+                if scannerFailed {
+                    Button("Повторить") {
+                        scannerFailed = false
+                    }
+                    .buttonStyle(.bordered)
+                }
+            } else {
+                ZStack {
+                    QRScannerView(
+                        isActive: selectedTab == 1 && !showManualAdd && !showBlur && userAlert == nil,
+                        onCodeScanned: handleScannedCode,
+                        onScannerUnavailable: handleScannerUnavailable
+                    )
                     RoundedRectangle(cornerRadius: 24)
                         .stroke(.white, lineWidth: 3)
                         .frame(width: 240, height: 240)
@@ -437,10 +606,6 @@ struct ContentView: View {
                 Text("Поместите QR-код внутрь рамки")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-            } else {
-                Text("Камера недоступна. Проверьте разрешение в настройках iPhone и перезапустите приложение.")
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
             }
 
             Button("Ввести вручную") {
@@ -451,6 +616,38 @@ struct ContentView: View {
             Spacer()
         }
         .padding(.top)
+    }
+
+    private func cameraMessage(_ message: String) -> some View {
+        Text(message)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal)
+    }
+
+    private func handleScannedCode(_ payload: String) -> Bool {
+        guard let result = OTPAuthParser().parse(payload) else {
+            userAlert = UserAlert(
+                title: "QR-код не поддерживается",
+                message: "Поддерживаются QR-коды для TOTP с шестью цифрами, периодом 30 секунд и алгоритмом SHA-1."
+            )
+            return false
+        }
+
+        service = result.service
+        login = result.login
+        secret = result.secret
+        showManualAdd = true
+        return true
+    }
+
+    private func handleScannerUnavailable() {
+        guard selectedTab == 1, !showBlur, !showManualAdd, userAlert == nil else { return }
+        scannerFailed = true
+        userAlert = UserAlert(
+            title: "Не удалось запустить сканирование",
+            message: "Попробуйте снова или добавьте аккаунт вручную."
+        )
     }
 }
 
