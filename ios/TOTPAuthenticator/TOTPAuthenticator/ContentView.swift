@@ -268,10 +268,18 @@ struct ContentView: View {
 
                 ZStack {
                     QRScannerView { payload in
-                        print("QR-код успешно распознан")
-                    }
 
-                    // Рамка поверх изображения с камеры
+                        guard let result = OTPAuthParser().parse(payload) else {
+                            print("Некорректный или неподдерживаемый TOTP QR-код")
+                            return
+                        }
+
+                        service = result.service
+                        login = result.login
+                        secret = result.secret
+
+                        showManualAdd = true
+                    }
                     RoundedRectangle(cornerRadius: 24)
                         .stroke(.white, lineWidth: 3)
                         .frame(width: 240, height: 240)
