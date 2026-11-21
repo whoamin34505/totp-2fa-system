@@ -50,7 +50,7 @@ struct KeychainStore {
         return nil
     }
     
-    func deleteSecret(accountID: String) {
+    func deleteSecret(accountID: String) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String:"TOTPAuthenticator",
@@ -61,10 +61,13 @@ struct KeychainStore {
         
         if status == errSecSuccess {
             print("Запись успешно удалена")
+            return true
         } else if status == errSecItemNotFound {
             print("Запись не найдена")
+            return true
         } else {
             print("Ошибка: \(status)")
+            return false
         }
     }
     

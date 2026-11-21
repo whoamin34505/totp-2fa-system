@@ -8,7 +8,7 @@
 import SwiftUI
 import UIKit
 
-struct Account: Identifiable {
+struct Account: Codable, Identifiable {
     let id : String
     let login: String
     let service: String
@@ -16,17 +16,14 @@ struct Account: Identifiable {
 
 struct ContentView: View {
     @State private var selectedTab = 0
-    @State private var isEditing = false
     @State private var isCopied = false
+    @State private var showAddMenu = false
     @State private var service = ""
     @State private var login = ""
     @State private var secret = ""
     @State private var hideTask: Task<Void, Never>?
     @State private var totpCodes: [String: String] = [:]
-    @State private var accounts = [
-        Account(id: "github-demo",login:"kolyan",service: "GitHub"),
-        Account(id: "gmail",login: "nikolay@gmail.com", service: "Google"),
-        Account(id: "microsoft",login: "admin", service: "Microsoft")]
+    @State private var accounts: [Account] = []
     
     private func updateCodes() {
         for account in accounts {
@@ -60,6 +57,7 @@ struct ContentView: View {
             return
         }
         accounts.append(Account(id: id, login: login, service: service))
+        saveAccounts()
         totpCodes[id] = TOTP().generate(key: decodedSecret)
         service = ""
         login = ""
@@ -67,10 +65,50 @@ struct ContentView: View {
         selectedTab = 0
     }
     
+    private func saveAccounts() {
+        if let data = try? JSONEncoder().encode(accounts) {
+            UserDefaults.standard.set(data, forKey: "accounts")
+        }
+    }
+    
+    private func loadAccounts() {
+        guard let data = UserDefaults.standard.data(forKey: "accounts") else {
+            accounts = []
+            return
+        }
+        do {
+            accounts = try JSONDecoder().decode([Account].self, from: data)
+        } catch {
+            print("Не удалось декодировать аккаунты: \(error)")
+            accounts = []
+        }
+    }
+
+    private func deleteAccounts(at offsets: IndexSet) {
+        let ids = offsets.map { accounts[$0].id }
+        for id in ids {
+            let store = KeychainStore()
+            if store.deleteSecret(accountID: id) {
+                accounts.removeAll { account in
+                    account.id == id
+                }
+                totpCodes.removeValue(forKey: id)
+            }
+        }
+        saveAccounts()
+    }
+    
+    private func moveAccounts(from source: IndexSet, to destination: Int) {
+        accounts.move(fromOffsets: source, toOffset: destination)
+        saveAccounts()
+    }
+    
     var body: some View {
         TabView(selection: $selectedTab) {
             Tab("Главная", systemImage: "house.fill", value: 0) {
-                homeView
+                NavigationStack {
+                    homeView
+                }
             }
 
             Tab("Добавить", systemImage: "plus.circle.fill", value: 1) {
@@ -86,6 +124,19 @@ struct ContentView: View {
                     .navigationTitle("Настройки")
                 }
             }
+        }.onAppear {
+            loadAccounts()
+            updateCodes()
+        }
+        .onChange(of: selectedTab) {
+            if selectedTab == 1 {
+                showAddMenu = true
+                selectedTab = 0
+            }
+        }
+        .confirmationDialog("test",isPresented: $showAddMenu, titleVisibility: .visible) {
+            Button("Ввести вручную") {}
+            Button("Отсканировать QR-код") {}
         }
     }
 
@@ -125,76 +176,58 @@ struct ContentView: View {
                 Text("Аккаунты")
                     .font(.title2)
                 Spacer()
-                if isEditing {
-                    Button("Готово") {
-                        print("Режим редактирования завершен")
-                        isEditing.toggle()
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.blue)
-                }
-                else {
-                    Button("Изменить") {
-                        print("Режим редактирования")
-                        isEditing.toggle()
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.blue)
-                }
+                EditButton().buttonStyle(.glass)
             }
             .padding()
-            ForEach (accounts) { account in
-                Button {
-                    if let code = totpCodes[account.id] {
-                        UIPasteboard.general.string = code
-                        let generator = UINotificationFeedbackGenerator()
-                        generator.notificationOccurred(.success)
-                        hideTask?.cancel()
-                        withAnimation(.easeInOut(duration: 0.1)) {
-                            isCopied = true
-                        }
-                        print("Код скопирован в буфер обмена")
-                        hideTask = Task {
-                            do {
-                                try await Task.sleep(for: .seconds(2))
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    isCopied = false
+            List {
+                ForEach (accounts) { account in
+                    Button {
+                        if let code = totpCodes[account.id] {
+                            UIPasteboard.general.string = code
+                            let generator = UINotificationFeedbackGenerator()
+                            generator.notificationOccurred(.success)
+                            hideTask?.cancel()
+                            withAnimation(.easeInOut(duration: 0.1)) {
+                                isCopied = true
+                            }
+                            print("Код скопирован в буфер обмена")
+                            hideTask = Task {
+                                do {
+                                    try await Task.sleep(for: .seconds(2))
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        isCopied = false
+                                    }
+                                } catch {
+                                    return
                                 }
-                            } catch {
-                                return
                             }
                         }
-                    }
-                } label: {
-                    HStack {
-                        VStack (alignment: .leading)
-                        {
-                            Text(account.login)
-                                .fontWeight(.semibold)
-                            Text(account.service)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    } label: {
+                        HStack {
+                            VStack (alignment: .leading)
+                            {
+                                Text(account.login)
+                                    .fontWeight(.semibold)
+                                Text(account.service)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(totpCodes[account.id] ?? "— — — — — —")
+                                .font(.title2)
                         }
-                        Spacer()
-                        Text(totpCodes[account.id] ?? "— — — — — —")
-                            .font(.title2)
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
-                }
-                .foregroundStyle(.primary)
-                Divider()
-            }
-            .padding(.horizontal)
+                    .foregroundStyle(.primary)
+                }.onDelete(perform: deleteAccounts)
+                    .onMove(perform: moveAccounts)
+            }.listStyle(.plain)
             if isCopied {
                 Text("Скопировано")
                     .foregroundStyle(.green)
                     .transition(.opacity)
             }
             Spacer()
-            Button("Сохранить тестовый GitHub") {
-                let store = KeychainStore()
-                store.saveSecret("JBSWY3DPEHPK3PXP", accountID: "github-demo")
-            }
         }
     }
 
