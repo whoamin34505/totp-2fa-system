@@ -267,7 +267,7 @@ struct ContentView: View {
                 && DataScannerViewController.isAvailable {
 
                 ZStack {
-                    QRScannerView { payload in
+                    QRScannerView(isActive: selectedTab == 1 && !showManualAdd) { payload in
 
                         guard let result = OTPAuthParser().parse(payload) else {
                             print("Некорректный или неподдерживаемый TOTP QR-код")
