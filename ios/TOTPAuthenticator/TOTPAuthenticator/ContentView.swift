@@ -8,6 +8,7 @@
 import SwiftUI
 import UIKit
 import VisionKit
+import AVFoundation
 
 struct Account: Codable, Identifiable {
     let id : String
@@ -17,6 +18,7 @@ struct Account: Codable, Identifiable {
 
 struct ContentView: View {
     @State private var selectedTab = 0
+    @State private var cameraAuthorized = false
     @State private var showManualAdd = false
     @State private var isCopied = false
     @State private var service = ""
@@ -25,6 +27,15 @@ struct ContentView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var totpCodes: [String: String] = [:]
     @State private var accounts: [Account] = []
+    @AppStorage("appTheme") private var appTheme = "system"
+
+    private func checkCameraPermission() async {
+        if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
+            cameraAuthorized = await AVCaptureDevice.requestAccess(for: .video)
+        } else {
+            cameraAuthorized = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
+        }
+    }
     
     private func updateCodes() {
         for account in accounts {
@@ -132,6 +143,11 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showManualAdd) {
             addAccountView
+        }
+        .task(id: selectedTab) {
+            if selectedTab == 1 {
+                await checkCameraPermission()
+            }
         }
     }
 
@@ -263,7 +279,8 @@ struct ContentView: View {
             Text("Сканирование QR-кода")
                 .font(.title2.bold())
 
-            if DataScannerViewController.isSupported
+            if cameraAuthorized
+                && DataScannerViewController.isSupported
                 && DataScannerViewController.isAvailable {
 
                 ZStack {
@@ -294,8 +311,9 @@ struct ContentView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
-                Text("Камера недоступна")
+                Text("Камера недоступна. Проверьте разрешение в настройках iPhone и перезапустите приложение.")
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
 
             Button("Ввести вручную") {

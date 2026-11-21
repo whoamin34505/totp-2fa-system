@@ -10,7 +10,7 @@ struct QRScannerView: UIViewControllerRepresentable {
         let scanner = DataScannerViewController(
             recognizedDataTypes: [.barcode(symbologies: [.qr])],
             qualityLevel: .fast,
-            recognizesMultipleItems: true,
+            recognizesMultipleItems: false,
             isPinchToZoomEnabled: true,
             isGuidanceEnabled: true,
             isHighlightingEnabled: true
