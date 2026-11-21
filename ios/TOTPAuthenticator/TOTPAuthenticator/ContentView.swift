@@ -9,6 +9,7 @@ import SwiftUI
 import UIKit
 import VisionKit
 import AVFoundation
+import LocalAuthentication
 
 struct Account: Codable, Identifiable {
     let id : String
@@ -28,6 +29,8 @@ struct ContentView: View {
     @State private var totpCodes: [String: String] = [:]
     @State private var accounts: [Account] = []
     @AppStorage("appTheme") private var appTheme = "system"
+    @AppStorage("faceIDEnabled") private var faceIDEnabled = false
+    @State private var isUnlocked = false
 
     private func checkCameraPermission() async {
         if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
@@ -116,37 +119,81 @@ struct ContentView: View {
         saveAccounts()
     }
     
+    private func authenticate() async -> Bool {
+        let context = LAContext()
+
+        do {
+            return try await context.evaluatePolicy(
+                .deviceOwnerAuthentication,
+                localizedReason: "Разблокируйте доступ к кодам"
+            )
+        } catch {
+            print("Ошибка Face ID: \(error)")
+            return false
+        }
+    }
+    
     var body: some View {
-        TabView(selection: $selectedTab) {
-            Tab("Главная", systemImage: "house.fill", value: 0) {
-                NavigationStack {
-                    homeView
-                }
-            }
+        Group {
+            if faceIDEnabled && !isUnlocked {
+                lockView
+            } else {
+                TabView(selection: $selectedTab) {
+                    Tab("Главная", systemImage: "house.fill", value: 0) {
+                        NavigationStack {
+                            homeView
+                        }
+                    }
 
-            Tab("Добавить", systemImage: "plus.circle.fill", value: 1) {
-                scannerView
-            }
+                    Tab("Добавить", systemImage: "plus.circle.fill", value: 1) {
+                        scannerView
+                    }
 
-            Tab("Настройки", systemImage: "gearshape.fill", value: 2) {
-                NavigationStack {
-                    ContentUnavailableView(
-                        "Настройки пока недоступны",
-                        systemImage: "gearshape"
-                    )
-                    .navigationTitle("Настройки")
+                    Tab("Настройки", systemImage: "gearshape.fill", value: 2) {
+                        NavigationStack {
+                            Form {
+                                Section("Настройки оформления") {
+                                    Picker("Тема оформления", selection: $appTheme) {
+                                        Text("Системная").tag("system")
+                                        Text("Светлая").tag("light")
+                                        Text("Тёмная").tag("dark")
+                                    }
+                                }
+                                Section("Безопасность") {
+                                    Toggle("Защита Face ID", isOn: Binding(
+                                        get: {
+                                            faceIDEnabled
+                                        },
+                                        set: { newValue in
+                                            Task {
+                                                if await authenticate() {
+                                                    faceIDEnabled = newValue
+                                                    isUnlocked = true
+                                                }
+                                            }
+                                        }
+                                    ))
+                                }
+                            }
+                            .navigationTitle("Настройки")
+                        }
+                    }
+                }.onAppear {
+                    loadAccounts()
+                    updateCodes()
                 }
-            }
-        }.onAppear {
-            loadAccounts()
-            updateCodes()
-        }
-        .sheet(isPresented: $showManualAdd) {
-            addAccountView
-        }
-        .task(id: selectedTab) {
-            if selectedTab == 1 {
-                await checkCameraPermission()
+                .sheet(isPresented: $showManualAdd) {
+                    addAccountView
+                }
+                .preferredColorScheme(
+                    appTheme == "dark" ? .dark :
+                    appTheme == "light" ? .light : nil
+                )
+                .task(id: selectedTab) {
+                    if selectedTab == 1 {
+                        await checkCameraPermission()
+                    }
+                }
             }
         }
     }
@@ -272,6 +319,26 @@ struct ContentView: View {
         } else {
             return .green
         }
+    }
+    
+    private var lockView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "lock.shield")
+                .font(.system(size: 60))
+
+            Text("Приложение заблокировано")
+                .font(.title2)
+
+            Button("Разблокировать") {
+                Task {
+                    if await authenticate() {
+                        isUnlocked = true
+                    }
+                }
+            }
+            .buttonStyle(.glass)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private var scannerView: some View {
