@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UIKit
+import VisionKit
 
 struct Account: Codable, Identifiable {
     let id : String
@@ -258,12 +259,45 @@ struct ContentView: View {
     }
     
     private var scannerView: some View {
-        VStack {
+        VStack(spacing: 20) {
             Text("Сканирование QR-кода")
+                .font(.title2.bold())
+
+            if DataScannerViewController.isSupported
+                && DataScannerViewController.isAvailable {
+
+                ZStack {
+                    QRScannerView { payload in
+                        print("QR-код успешно распознан")
+                    }
+
+                    // Рамка поверх изображения с камеры
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(.white, lineWidth: 3)
+                        .frame(width: 240, height: 240)
+                        .allowsHitTesting(false)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 400)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .padding(.horizontal)
+
+                Text("Поместите QR-код внутрь рамки")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Камера недоступна")
+                    .foregroundStyle(.secondary)
+            }
+
             Button("Ввести вручную") {
                 showManualAdd = true
             }
+            .buttonStyle(.borderedProminent)
+
+            Spacer()
         }
+        .padding(.top)
     }
 }
 
