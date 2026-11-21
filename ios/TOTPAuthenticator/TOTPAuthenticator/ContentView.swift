@@ -16,8 +16,8 @@ struct Account: Codable, Identifiable {
 
 struct ContentView: View {
     @State private var selectedTab = 0
+    @State private var showManualAdd = false
     @State private var isCopied = false
-    @State private var showAddMenu = false
     @State private var service = ""
     @State private var login = ""
     @State private var secret = ""
@@ -63,6 +63,7 @@ struct ContentView: View {
         login = ""
         secret = ""
         selectedTab = 0
+        showManualAdd = false
     }
     
     private func saveAccounts() {
@@ -112,7 +113,7 @@ struct ContentView: View {
             }
 
             Tab("Добавить", systemImage: "plus.circle.fill", value: 1) {
-                addAccountView
+                scannerView
             }
 
             Tab("Настройки", systemImage: "gearshape.fill", value: 2) {
@@ -128,15 +129,8 @@ struct ContentView: View {
             loadAccounts()
             updateCodes()
         }
-        .onChange(of: selectedTab) {
-            if selectedTab == 1 {
-                showAddMenu = true
-                selectedTab = 0
-            }
-        }
-        .confirmationDialog("test",isPresented: $showAddMenu, titleVisibility: .visible) {
-            Button("Ввести вручную") {}
-            Button("Отсканировать QR-код") {}
+        .sheet(isPresented: $showManualAdd) {
+            addAccountView
         }
     }
 
@@ -260,6 +254,15 @@ struct ContentView: View {
             return .orange
         } else {
             return .green
+        }
+    }
+    
+    private var scannerView: some View {
+        VStack {
+            Text("Сканирование QR-кода")
+            Button("Ввести вручную") {
+                showManualAdd = true
+            }
         }
     }
 }
