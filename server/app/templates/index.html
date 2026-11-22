@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Вход · TOTP Authenticator</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=4">
     <script src="/static/qr-code-styling.min.js" defer></script>
     <script src="/static/auth.js" defer></script>
-    <script src="/static/login.js" defer></script>
+    <script src="/static/login.js?v=4" defer></script>
 </head>
 <body>
 <main class="auth">
@@ -54,7 +54,17 @@
         <p id="qr-instructions" hidden>Откройте приложение-аутентификатор и отсканируйте QR-код.</p>
         <div id="qr-code" role="img" aria-label="QR-код для приложения-аутентификатора" hidden></div>
 
-        <p class="secret">Ключ для ручного ввода <code id="manual-secret"></code></p>
+        <p class="secret">
+            Не получается отсканировать QR-код?
+            Скопируйте ключ и введите его в приложении-аутентификаторе.
+        </p>
+
+        <p class="secret">
+            <code id="manual-secret" hidden></code>
+        </p>
+
+        <button id="toggle-secret" type="button">Показать ключ</button>
+
         <button id="copy-secret" type="button">Скопировать ключ</button>
         <p id="copy-message" class="message" role="status"></p>
 

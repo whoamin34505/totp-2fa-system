@@ -4,6 +4,7 @@ const confirmForm = document.getElementById("confirm-form");
 const qrCode = document.getElementById("qr-code");
 const qrInstructions = document.getElementById("qr-instructions");
 const manualSecret = document.getElementById("manual-secret");
+const toggleSecretButton = document.getElementById("toggle-secret");
 const copyMessage = document.getElementById("copy-message");
 const successTitle = document.getElementById("success-title");
 const profileId = document.getElementById("profile-info");
@@ -28,6 +29,8 @@ function showScreen(id) {
         qrCode.hidden = true;
         qrInstructions.hidden = true;
         manualSecret.textContent = "";
+        manualSecret.hidden = true;
+        toggleSecretButton.textContent = "Показать ключ";
         copyMessage.textContent = "";
     }
 }
@@ -111,6 +114,16 @@ setupButton.addEventListener("click", function () {
     runAction(setupButton, setupTotp);
 });
 
+toggleSecretButton.addEventListener("click", function () {
+    manualSecret.hidden = !manualSecret.hidden;
+
+    if (manualSecret.hidden) {
+        toggleSecretButton.textContent = "Показать ключ";
+    } else {
+        toggleSecretButton.textContent = "Скрыть ключ";
+    }
+});
+
 async function copySecret() {
     const secret = manualSecret.textContent;
     let copied;
@@ -133,6 +146,8 @@ async function copySecret() {
         return;
     }
 
+    manualSecret.hidden = false;
+    toggleSecretButton.textContent = "Скрыть ключ";
     const selection = window.getSelection();
     selection.selectAllChildren(manualSecret);
     copyMessage.textContent = "Ключ выделен. Скопируйте его.";

@@ -130,9 +130,12 @@ button:disabled {
 }
 
 #manual-secret {
-    display: block;
     overflow-wrap: anywhere;
     user-select: all;
+}
+
+#manual-secret:not([hidden]) {
+    display: block;
 }
 
 .message {
