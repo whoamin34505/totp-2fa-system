@@ -137,6 +137,27 @@ button:disabled {
     text-align: left;
 }
 
+.confirm-entry label {
+    text-align: center;
+    color: #596273;
+    font-weight: 600;
+}
+
+#confirm-code {
+    text-align: center;
+    font-size: 24px;
+    letter-spacing: 8px;
+    font-weight: 600;
+    color: #202938;
+    border: 2px solid #cbd0d8;
+}
+
+#confirm-code:focus {
+    border-color: #596b88;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(89, 107, 136, 0.2);
+}
+
 .secret-buttons {
     display: flex;
     justify-content: center;
