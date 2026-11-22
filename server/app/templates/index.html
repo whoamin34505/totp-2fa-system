@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Вход · TOTP Authenticator</title>
-    <link rel="stylesheet" href="/static/style.css?v=4">
+    <link rel="stylesheet" href="/static/style.css">
     <script src="/static/qr-code-styling.min.js" defer></script>
     <script src="/static/auth.js" defer></script>
     <script src="/static/login.js?v=4" defer></script>
@@ -51,30 +51,29 @@
     <section id="confirm" hidden>
         <h1>Добавьте аккаунт</h1>
         <p class="step-indicator">Шаг 2 из 2 · Подтверждение</p>
-        <p id="qr-instructions" hidden>Откройте приложение-аутентификатор и отсканируйте QR-код.</p>
-        <div id="qr-code" role="img" aria-label="QR-код для приложения-аутентификатора" hidden></div>
+        <div class="confirm-layout">
+            <div class="confirm-qr">
+                <p id="qr-instructions" hidden>Откройте приложение-аутентификатор и отсканируйте QR-код.</p>
+                <div id="qr-code" role="img" aria-label="QR-код для приложения-аутентификатора" hidden></div>
+                <p class="secret">Не получается отсканировать? Введите ключ в приложении вручную.</p>
+                <code id="manual-secret" hidden></code>
+                <div class="secret-buttons">
+                    <button id="toggle-secret" type="button">Показать ключ</button>
+                    <button id="copy-secret" type="button">Скопировать ключ</button>
+                </div>
+                <p id="copy-message" class="message" role="status"></p>
+            </div>
 
-        <p class="secret">
-            Не получается отсканировать QR-код?
-            Скопируйте ключ и введите его в приложении-аутентификаторе.
-        </p>
-
-        <p class="secret">
-            <code id="manual-secret" hidden></code>
-        </p>
-
-        <button id="toggle-secret" type="button">Показать ключ</button>
-
-        <button id="copy-secret" type="button">Скопировать ключ</button>
-        <p id="copy-message" class="message" role="status"></p>
-
-        <form id="confirm-form" method="post">
-            <label for="confirm-code">Шестизначный код из приложения</label>
-            <input type="text" id="confirm-code" name="code" maxlength="6"
-                   pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required>
-            <button type="submit">Подтвердить подключение</button>
-        </form>
-        <button class="start-over" type="button">Начать заново</button>
+            <div class="confirm-entry">
+                <form id="confirm-form" method="post">
+                    <label for="confirm-code">Шестизначный код из приложения</label>
+                    <input type="text" id="confirm-code" name="code" maxlength="6"
+                           pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required>
+                    <button type="submit">Подтвердить подключение</button>
+                </form>
+                <button class="start-over" type="button">Начать заново</button>
+            </div>
+        </div>
     </section>
 
     <section id="success" hidden>

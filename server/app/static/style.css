@@ -15,6 +15,10 @@ body {
     padding: 16px 0;
 }
 
+.auth:has(#confirm:not([hidden])) {
+    max-width: 680px;
+}
+
 .auth section {
     display: flex;
     flex-direction: column;
@@ -110,7 +114,39 @@ button:disabled {
     max-width: 100%;
 }
 
+.confirm-layout {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+    width: 100%;
+}
+
+.confirm-qr,
+.confirm-entry {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+}
+
+.confirm-qr p {
+    line-height: 1.5;
+}
+
+.confirm-entry form {
+    margin: 0 auto;
+    text-align: left;
+}
+
+.secret-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+}
+
 #qr-code {
+    width: fit-content;
+    box-sizing: border-box;
+    max-width: 100%;
     margin: 4px auto 12px;
     padding: 16px;
     background-color: white;
@@ -198,5 +234,15 @@ button:disabled {
     #qr-code {
         box-sizing: border-box;
         max-width: 100%;
+    }
+
+    .confirm-layout {
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .confirm-qr,
+    .confirm-entry {
+        width: 100%;
     }
 }
