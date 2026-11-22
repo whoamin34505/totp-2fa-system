@@ -37,13 +37,6 @@ CREATE TABLE IF NOT EXISTS totp_rate_limits (
     blocked_until TIMESTAMPTZ
 );
 
-GRANT USAGE ON SCHEMA public TO developer;
-GRANT SELECT, INSERT, UPDATE ON users TO developer;
-GRANT SELECT, INSERT, UPDATE, DELETE ON pending_totp_enrollments TO developer;
-GRANT SELECT, INSERT, UPDATE, DELETE ON pending_login_attempts TO developer;
-GRANT SELECT, INSERT, UPDATE, DELETE ON user_sessions TO developer;
-GRANT SELECT, INSERT, UPDATE, DELETE ON totp_rate_limits TO developer;
-
 CREATE INDEX IF NOT EXISTS idx_login_attempts_user ON pending_login_attempts(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_login_attempts_expires ON pending_login_attempts(expires_at);
